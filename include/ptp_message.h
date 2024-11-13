@@ -225,4 +225,6 @@ typedef struct ptp_message_pdelay_resp_follow_up_s
 // } ptp_message_signaling_t;
 // #pragma pack(pop)
 
+ptp_message_header_t ptp_message_create_header(ptp_message_type_t message_type);
+
 #endif /* PTP_MESSAGE_H */
