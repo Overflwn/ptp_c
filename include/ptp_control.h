@@ -26,12 +26,15 @@ typedef struct ptp_delay_info_s
     uint64_t last_calculated_delay;
 } ptp_delay_info_t;
 
-typedef struct key_val_entry_s
+/**
+* @brief Simple double-linked-list helper struct
+**/
+typedef struct ptp_delay_info_entry_s
 {
     ptp_delay_info_t delay_info;
-    struct key_val_entry_s* previous;
-    struct key_val_entry_s* next;
-} key_val_entry_t;
+    struct ptp_delay_info_entry_s* previous;
+    struct ptp_delay_info_entry_s* next;
+} ptp_delay_info_entry_t;
 
 typedef struct timesync_clock_s
 {
@@ -61,7 +64,7 @@ typedef struct timesync_clock_s
     ptp_mutex_lock_func mutex_lock;
     ptp_mutex_unlock_func mutex_unlock;
 
-    key_val_entry_t *delay_infos;
+    ptp_delay_info_entry_t *delay_infos;
 
     uint64_t pdelay_req_interval_ms;
 

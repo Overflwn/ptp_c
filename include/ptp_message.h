@@ -56,8 +56,8 @@ typedef struct ptp_message_header_s
             uint8_t profile_specific_1: 1;
             uint8_t profile_specific_2: 1;
             uint8_t security: 1;
-            uint8_t li61: 1;
-            uint8_t li59: 1;
+            uint8_t leap_61: 1;
+            uint8_t leap_59: 1;
             uint8_t utc_offset_valid: 1;
             uint8_t timescale: 1;
             uint8_t time_tracable: 1;

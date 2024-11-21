@@ -11,9 +11,9 @@
 #include <arpa/inet.h>
 #endif
 
-static key_val_entry_t *search_delay_info(timesync_clock_t *instance, uint64_t id)
+static ptp_delay_info_entry_t *search_delay_info(timesync_clock_t *instance, uint64_t id)
 {
-    key_val_entry_t *temp = instance->delay_infos;
+    ptp_delay_info_entry_t *temp = instance->delay_infos;
     while (temp != NULL)
     {
         if (temp->delay_info.peer_id == id)
@@ -28,14 +28,14 @@ static key_val_entry_t *search_delay_info(timesync_clock_t *instance, uint64_t i
     return temp;
 }
 
-static key_val_entry_t *get_or_new_delay_info(timesync_clock_t *instance, uint64_t id)
+static ptp_delay_info_entry_t *get_or_new_delay_info(timesync_clock_t *instance, uint64_t id)
 {
-    key_val_entry_t *temp = search_delay_info(instance, id);
+    ptp_delay_info_entry_t *temp = search_delay_info(instance, id);
     if (temp == NULL)
     {
-        temp = calloc(1, sizeof(key_val_entry_t));
+        temp = calloc(1, sizeof(ptp_delay_info_entry_t));
         temp->delay_info.peer_id = id;
-        key_val_entry_t *last = instance->delay_infos;
+        ptp_delay_info_entry_t *last = instance->delay_infos;
         if (last == NULL)
         {
             instance->delay_infos = temp;
@@ -55,7 +55,7 @@ static key_val_entry_t *get_or_new_delay_info(timesync_clock_t *instance, uint64
 
 static void remove_delay_info(timesync_clock_t *instance, uint64_t id)
 {
-    key_val_entry_t *entry = search_delay_info(instance, id);
+    ptp_delay_info_entry_t *entry = search_delay_info(instance, id);
     if (entry != NULL)
     {
         entry->previous->next = entry->next;
@@ -165,7 +165,7 @@ void ptp_thread_func(timesync_clock_t *instance)
                 case PTP_MESSAGE_TYPE_SYNC:
                 {
                     ptp_message_sync_t *msg = (ptp_message_sync_t*)rx_buf;
-                    key_val_entry_t *delay_info = get_or_new_delay_info(instance, port_identity_to_id(&msg->header.source_port_identity));
+                    ptp_delay_info_entry_t *delay_info = get_or_new_delay_info(instance, port_identity_to_id(&msg->header.source_port_identity));
                     if (delay_info != NULL)
                     {
                         // Don't adjust clock
@@ -183,7 +183,7 @@ void ptp_thread_func(timesync_clock_t *instance)
                 case PTP_MESSAGE_TYPE_FOLLOW_UP:
                 {
                     ptp_message_follow_up_t *msg = (ptp_message_follow_up_t*)rx_buf;
-                    key_val_entry_t *delay_info = search_delay_info(instance, port_identity_to_id(&msg->header.source_port_identity));
+                    ptp_delay_info_entry_t *delay_info = search_delay_info(instance, port_identity_to_id(&msg->header.source_port_identity));
                     if (delay_info != NULL)
                     {
                         delay_info->delay_info.t1 = ts_to_ns(&msg->precise_origin_timestamp);
@@ -193,6 +193,10 @@ void ptp_thread_func(timesync_clock_t *instance)
                             int64_t offset = ((int64_t)delay_info->delay_info.t2 - (int64_t)delay_info->delay_info.t1) - (int64_t)delay_info->delay_info.last_calculated_delay;
                             // TODO: Check returnval
                             instance->set_time_offset_ns(offset);
+                        }
+                        else
+                        {
+                            // TODO: Notify user?
                         }
                     }
                     break;
@@ -213,9 +217,10 @@ void ptp_thread_func(timesync_clock_t *instance)
                 {
                     ptp_message_pdelay_resp_t *msg = (ptp_message_pdelay_resp_t*)rx_buf;
                     uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
-                    key_val_entry_t *delay_info = get_or_new_delay_info(instance, id);
+                    ptp_delay_info_entry_t *delay_info = get_or_new_delay_info(instance, id);
                     if (delay_info != NULL)
                     {
+                        // TODO: Check sequence_id
                         uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
                         delay_info->delay_info.t3 = instance->latest_t3;
                         delay_info->delay_info.t4 = ts;
@@ -227,7 +232,7 @@ void ptp_thread_func(timesync_clock_t *instance)
                 {
                     ptp_message_pdelay_resp_follow_up_t *msg = (ptp_message_pdelay_resp_follow_up_t*)rx_buf;
                     uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
-                    key_val_entry_t *delay_info = search_delay_info(instance, id);
+                    ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
                     if (delay_info != NULL)
                     {
                         uint64_t ts = ts_to_ns(&msg->response_origin_timestamp);
