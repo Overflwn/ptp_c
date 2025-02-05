@@ -13,6 +13,10 @@
 #elif defined(__APPLE__)
 #include <arpa/inet.h>
 #include <machine/endian.h>
+#define htobe64(x) htonll(x)
+#define htobe32(x) htonl(x)
+#define be64toh(x) ntohll(x)
+#define be32toh(x) ntohl(x)
 #endif
 
 static ptp_delay_info_entry_t *search_delay_info(timesync_clock_t *instance,
@@ -74,13 +78,11 @@ static uint64_t port_identity_to_id(ptp_message_port_identity_t *port_ident) {
 
 static uint64_t ts_to_ns(ptp_message_timestamp_t *ts) {
   uint64_t temp = 0;
-  temp |= ts->seconds[0];
-  temp |= (uint64_t)ts->seconds[1] << 8;
-  temp |= (uint64_t)ts->seconds[2] << 16;
-  temp |= (uint64_t)ts->seconds[3] << 24;
-  temp |= (uint64_t)ts->seconds[4] << 32;
-  temp |= (uint64_t)ts->seconds[5] << 40;
-  temp += ntohl(ts->nanoseconds);
+  uint64_t temp_secs_be = 0;
+  memcpy(&((uint8_t *)(&temp_secs_be))[2], ts->seconds, sizeof(ts->seconds));
+  temp_secs_be = be64toh(temp_secs_be);
+  temp = temp_secs_be * 1000000000;
+  temp += be32toh(ts->nanoseconds);
   return temp;
 }
 
@@ -199,13 +201,14 @@ void ptp_thread_func(timesync_clock_t *instance) {
         ptp_message_pdelay_req_t *msg = (ptp_message_pdelay_req_t *)rx_buf;
         // TODO: Handle PDELAY_REQ requests coming from other peers
         uint64_t received = instance->get_time_ns();
-        uint64_t secs = htonll(received / 1000000000);
+        uint64_t secs = htobe64(received / 1000000000);
         received = received % 1000000000;
         ptp_message_pdelay_resp_t *resp = (ptp_message_pdelay_resp_t *)tx_buf;
         resp->header = ptp_message_create_header(PTP_MESSAGE_TYPE_PDELAY_RESP);
         resp->header.sequence_id = msg->header.sequence_id;
         resp->requesting_port_identity = msg->header.source_port_identity;
-        resp->request_receipt_timestamp.nanoseconds = htonl(received);
+        resp->request_receipt_timestamp.nanoseconds =
+            htobe32((uint32_t)received);
         memcpy(resp->request_receipt_timestamp.seconds, &((uint8_t *)secs)[2],
                6);
 
@@ -220,8 +223,8 @@ void ptp_thread_func(timesync_clock_t *instance) {
             ptp_message_create_header(PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP);
         fup->header.sequence_id = msg->header.sequence_id;
         fup->requesting_port_identity = msg->header.source_port_identity;
-        secs = htonll(sent_ts / 1000000000);
-        sent_ts = htonl(sent_ts % 1000000000);
+        secs = htobe64(sent_ts / 1000000000);
+        sent_ts = htobe32(sent_ts % 1000000000);
         fup->response_origin_timestamp.nanoseconds = sent_ts;
         memcpy(fup->response_origin_timestamp.seconds, &((uint8_t *)secs)[2],
                6);
