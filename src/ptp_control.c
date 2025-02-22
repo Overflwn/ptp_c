@@ -8,6 +8,9 @@
 #ifdef _WIN32
 #include <winsock.h>
 #elif defined(__linux__)
+// NOTE: My guess is that most microcontroller SDKs have some sort of support
+// for these headers aswell
+// TODO: Try compiling this for ESP
 #include <arpa/inet.h>
 #include <endian.h>
 #elif defined(__APPLE__)
@@ -19,8 +22,12 @@
 #define be32toh(x) ntohl(x)
 #endif
 
-static ptp_delay_info_entry_t *search_delay_info(timesync_clock_t *instance,
-                                                 uint64_t id) {
+/// @brief Searches for an existing delay_info entry for the given id
+/// @param[in] instance The PTP clock instance
+/// @param[in] id The ID to search for
+/// @return Pointer to the delay_info, NULL if not found
+static ptp_delay_info_entry_t *
+search_delay_info(const timesync_clock_t *instance, const uint64_t id) {
   ptp_delay_info_entry_t *temp = instance->delay_infos;
   while (temp != NULL) {
     if (temp->delay_info.peer_id == id) {
@@ -34,8 +41,11 @@ static ptp_delay_info_entry_t *search_delay_info(timesync_clock_t *instance,
 
 /// @brief Find delay info for the given client or create a new instance and
 ///        append it to the list
+/// @param[in] instance The PTP clock instance
+/// @param[in] The ID to look for or create a new delay_info entry for
+/// @return Pointer to the new or existing delay_info entry
 static ptp_delay_info_entry_t *get_or_new_delay_info(timesync_clock_t *instance,
-                                                     uint64_t id) {
+                                                     const uint64_t id) {
   ptp_delay_info_entry_t *temp = search_delay_info(instance, id);
   if (temp == NULL) {
     temp = calloc(1, sizeof(ptp_delay_info_entry_t));
@@ -54,7 +64,11 @@ static ptp_delay_info_entry_t *get_or_new_delay_info(timesync_clock_t *instance,
   return temp;
 }
 
-static void remove_delay_info(timesync_clock_t *instance, uint64_t id) {
+/// @brief Searches for a delay_info entry with the given ID and removes it from
+///        the PTP clock instance
+/// @param[in] instance The PTP clock instance
+/// @param[in] id The ID to look for and delete
+static void remove_delay_info(timesync_clock_t *instance, const uint64_t id) {
   ptp_delay_info_entry_t *entry = search_delay_info(instance, id);
   if (entry != NULL) {
     entry->previous->next = entry->next;
@@ -63,8 +77,15 @@ static void remove_delay_info(timesync_clock_t *instance, uint64_t id) {
   }
 }
 
-static uint64_t port_identity_to_id(ptp_message_port_identity_t *port_ident) {
+/// @brief Simple function that builds a key for our delay_info list
+/// @param[in] port_ident Port identity of peer
+/// @return The calculated ID or 0 on error
+static uint64_t
+port_identity_to_id(const ptp_message_port_identity_t *port_ident) {
   uint64_t id = 0;
+  if (NULL == port_ident) {
+    return id;
+  }
   id |= port_ident->clock_identity[0];
   id |= (uint64_t)port_ident->clock_identity[1] << 8;
   id |= (uint64_t)port_ident->clock_identity[2] << 16;
@@ -76,7 +97,15 @@ static uint64_t port_identity_to_id(ptp_message_port_identity_t *port_ident) {
   return id;
 }
 
-static uint64_t ts_to_ns(ptp_message_timestamp_t *ts) {
+/// @brief Helper function to convert a ptp_message_timestamp_t to 64bit
+///        nanoseconds value
+/// TODO: Move this function (and probably others aswell) to a utils file
+/// @param[in] ts The timestamp to convert
+/// @return The converted timestamp or 0 on error
+static uint64_t ts_to_ns(const ptp_message_timestamp_t *ts) {
+  if (NULL == ts) {
+    return 0;
+  }
   uint64_t temp = 0;
   uint64_t temp_secs_be = 0;
   memcpy(&((uint8_t *)(&temp_secs_be))[2], ts->seconds, sizeof(ts->seconds));
@@ -112,13 +141,15 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   req.header.version = 2;
   req.header.reserved_1 = 0;
   req.header.message_length = sizeof(ptp_message_pdelay_req_t);
-  // TODO: Domain number
+  // TODO: Make domain number adjustable
   req.header.domain_num = 0;
   req.header.reserved_2 = 0;
   req.header.flags.raw_val = 0;
   req.header.flags.utc_offset_valid = 1;
+  // TODO: Look into what the correction field does
   req.header.correction_field = 0;
   req.header.reserved_3 = 0;
+  // TODO: Make clock identity and port num adjustable
   req.header.source_port_identity.port_number = 0x0001;
   req.header.source_port_identity.clock_identity[0] = 0x01;
   req.header.source_port_identity.clock_identity[1] = 0x02;
@@ -130,7 +161,7 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   req.header.sequence_id = htons(sequence_id);
   req.header.control_field = 0x05;
   req.header.log_message_interval = 0x7F;
-  // origintimestamp shall be 0
+  // origintimestamp shall be 0 (not needed for PDELAY_REQ)
 
   memcpy(tx_buf, (void *)&req, sizeof(ptp_message_pdelay_req_t));
   while (!instance->stop) {
@@ -202,6 +233,7 @@ void ptp_thread_func(timesync_clock_t *instance) {
         // TODO: Handle PDELAY_REQ requests coming from other peers
         uint64_t received = instance->get_time_ns();
         uint64_t secs = htobe64(received / 1000000000);
+        // Get the remaining ns
         received = received % 1000000000;
         ptp_message_pdelay_resp_t *resp = (ptp_message_pdelay_resp_t *)tx_buf;
         resp->header = ptp_message_create_header(PTP_MESSAGE_TYPE_PDELAY_RESP);
@@ -241,11 +273,13 @@ void ptp_thread_func(timesync_clock_t *instance) {
         ptp_delay_info_entry_t *delay_info =
             get_or_new_delay_info(instance, id);
         if (delay_info != NULL) {
-          // TODO: Check sequence_id
+          // TODO: Check sequence_id to be safe
           uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
           delay_info->delay_info.t3 = instance->latest_t3;
           delay_info->delay_info.t4 = ts;
           delay_info->delay_info.t6 = instance->get_time_ns();
+        } else {
+          // TODO: Handle erroneous state
         }
         break;
       }
