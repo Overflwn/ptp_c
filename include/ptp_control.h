@@ -67,7 +67,7 @@ typedef struct timesync_clock_s {
   ptp_delay_info_entry_t *delay_infos;
 
   /// @brief In what interval to cyclically send PDELAY_REQ messages in.
-  uint64_t pdelay_req_interval_ms;
+  uint32_t pdelay_req_interval_ms;
 
   // Internal variables, just set these to 0
   uint64_t current_delay_ns;

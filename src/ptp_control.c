@@ -7,6 +7,10 @@
 // Headers for hton / ntoh
 #ifdef _WIN32
 #include <winsock.h>
+#define htobe64(x) htonll(x)
+#define htobe32(x) htonl(x)
+#define be64toh(x) ntohll(x)
+#define be32toh(x) ntohl(x)
 #elif defined(__linux__)
 // NOTE: My guess is that most microcontroller SDKs have some sort of support
 // for these headers aswell
@@ -256,8 +260,8 @@ void ptp_thread_func(timesync_clock_t *instance) {
         fup->header.sequence_id = msg->header.sequence_id;
         fup->requesting_port_identity = msg->header.source_port_identity;
         secs = htobe64(sent_ts / 1000000000);
-        sent_ts = htobe32(sent_ts % 1000000000);
-        fup->response_origin_timestamp.nanoseconds = sent_ts;
+        uint32_t sent_ns = htobe32(sent_ts % 1000000000);
+        fup->response_origin_timestamp.nanoseconds = sent_ns;
         memcpy(fup->response_origin_timestamp.seconds, &((uint8_t *)secs)[2],
                6);
 
