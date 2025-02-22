@@ -37,8 +37,23 @@ typedef struct ptp_delay_info_entry_s {
 /// @brief  Main PTP instance struct. Create the instance yourself and fill it
 ///         with the necessary callbacks and mutex.
 typedef struct timesync_clock_s {
-  /// @brief Callback to get the current time
-  get_time_ns_cb get_time_ns;
+  /// @brief Callback to get the current time (after receiving a PTP frame)
+  ///        NOTE: You might aswell pass a function that returns the timestamp
+  ///        of the last in- *or* outgoing PTP frame! This would be even more
+  ///        accurate then.
+  ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
+  ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
+  ///        you might aswell return 0 in these cases
+  get_time_ns_cb get_time_ns_rx;
+
+  /// @brief Callback to get the current time (after sending a PTP frame)
+  ///        NOTE: You might aswell pass a function that returns the timestamp
+  ///        of the last outgoing PTP frame! This would be even more
+  ///        accurate then.
+  ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
+  ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
+  ///        you might aswell return 0 in these cases
+  get_time_ns_cb get_time_ns_tx;
 
   /// @brief Callback to set the new time
   set_time_ns_cb set_time_ns;
