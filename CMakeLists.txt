@@ -36,6 +36,7 @@ add_executable(
 target_link_libraries(
     ${PROJECT_NAME}_test
     GTest::gtest_main
+    ${PROJECT_NAME}
 )
 
 include(GoogleTest)
