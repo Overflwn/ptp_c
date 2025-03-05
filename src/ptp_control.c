@@ -6,11 +6,13 @@
 
 // Headers for hton / ntoh
 #ifdef _WIN32
-#include <winsock.h>
+#include <Winsock2.h>
 #define htobe64(x) htonll(x)
 #define htobe32(x) htonl(x)
+#define htobe16(x) htons(x)
 #define be64toh(x) ntohll(x)
 #define be32toh(x) ntohl(x)
+#define be16toh(x) ntohs(x)
 #elif defined(__linux__)
 // NOTE: My guess is that most microcontroller SDKs have some sort of support
 // for these headers aswell
@@ -22,8 +24,10 @@
 #include <machine/endian.h>
 #define htobe64(x) htonll(x)
 #define htobe32(x) htonl(x)
+#define htobe16(x) htons(x)
 #define be64toh(x) ntohll(x)
 #define be32toh(x) ntohl(x)
+#define be16toh(x) ntohs(x)
 #endif
 
 /// @brief Searches for an existing delay_info entry for the given id
