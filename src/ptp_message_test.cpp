@@ -45,7 +45,7 @@ bool set_time_ns(uint64_t new_time) {
 }
 
 bool set_time_offset(int64_t offset) {
-  if (offset < 0 && cur_time < (offset * -1)) {
+  if (offset < 0 && cur_time < (uint64_t)(offset * -1)) {
     return false;
   }
   cur_time += offset;
