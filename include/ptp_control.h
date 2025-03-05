@@ -1,5 +1,9 @@
 #ifndef PTP_CONTROL_H
 #define PTP_CONTROL_H
+#ifdef __cplusplus__
+extern "C" {
+#endif
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -134,4 +138,7 @@ void ptp_thread_func(timesync_clock_t *instance);
 // bool ptp_build_pdelay_resp_fup_message(timesync_clock_t *instance,
 //                                        uint8_t *tx_buf, size_t len);
 
+#ifdef __cplusplus__
+}
+#endif
 #endif

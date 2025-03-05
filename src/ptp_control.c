@@ -145,7 +145,7 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   // TODO: After further testing, set this to 1. OR Make it adjustable for the
   // user to allow for higher compatiblity with master clocks
   req.header.minor_version = 0;
-  req.header.message_length = sizeof(ptp_message_pdelay_req_t);
+  req.header.message_length = htobe16(sizeof(ptp_message_pdelay_req_t));
   // TODO: Make domain number adjustable
   req.header.domain_num = instance->domain_id;
   // TODO: Make minor_sdo_id adjustable

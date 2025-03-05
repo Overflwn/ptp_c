@@ -1,6 +1,10 @@
 #ifndef PTP_MESSAGE_H
 #define PTP_MESSAGE_H
 
+#ifdef __cplusplus__
+extern "C" {
+#endif
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -249,4 +253,7 @@ typedef struct {
 ptp_message_header_t ptp_message_create_header(timesync_clock_t *instance,
                                                ptp_message_type_t message_type);
 
+#ifdef __cplusplus__
+}
+#endif
 #endif /* PTP_MESSAGE_H */
