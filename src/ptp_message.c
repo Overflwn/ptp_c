@@ -1,3 +1,7 @@
+#ifdef __cplusplus__
+extern "C" {
+#endif
+
 #include "ptp_message.h"
 
 ptp_message_header_t
@@ -59,3 +63,7 @@ ptp_message_create_header(timesync_clock_t *instance,
   }
   return header;
 }
+
+#ifdef __cplusplus__
+}
+#endif

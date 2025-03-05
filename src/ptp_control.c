@@ -1,3 +1,7 @@
+#ifdef __cplusplus__
+extern "C" {
+#endif
+
 #include "ptp_control.h"
 #include "ptp_message.h"
 #include <stdint.h>
@@ -333,3 +337,7 @@ void ptp_thread_func(timesync_clock_t *instance) {
     }
   }
 }
+
+#ifdef __cplusplus__
+}
+#endif
