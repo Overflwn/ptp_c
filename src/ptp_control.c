@@ -140,18 +140,24 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   // tx_buf[13] = 0xF7;
   ptp_message_pdelay_req_t req = {{0}};
   req.header.message_type = PTP_MESSAGE_TYPE_PDELAY_REQ;
-  req.header.transport_specific = 0;
+  req.header.major_sdo_id = instance->major_sdo_id;
   req.header.version = 2;
-  req.header.reserved_1 = 0;
+  // TODO: After further testing, set this to 1. OR Make it adjustable for the
+  // user to allow for higher compatiblity with master clocks
+  req.header.minor_version = 0;
   req.header.message_length = sizeof(ptp_message_pdelay_req_t);
   // TODO: Make domain number adjustable
-  req.header.domain_num = 0;
-  req.header.reserved_2 = 0;
+  req.header.domain_num = instance->domain_id;
+  // TODO: Make minor_sdo_id adjustable
+  req.header.minor_sdo_id = instance->minor_sdo_id;
   req.header.flags.raw_val = 0;
+  req.header.flags.two_step = 1;
   req.header.flags.utc_offset_valid = 1;
   // TODO: Look into what the correction field does
+  // Update: seems to be related to transparent clocks (e.g. PTP-enabled
+  // switches), ignore in this case
   req.header.correction_field = 0;
-  req.header.reserved_3 = 0;
+  req.header.message_type_specific = 0;
   // TODO: Make clock identity and port num adjustable
   req.header.source_port_identity.port_number = 0x0001;
   req.header.source_port_identity.clock_identity[0] = 0x01;
@@ -162,6 +168,7 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   req.header.source_port_identity.clock_identity[5] = 0x06;
   uint16_t sequence_id = 0;
   req.header.sequence_id = htons(sequence_id);
+  // 0x05 := "All others", see struct field comment
   req.header.control_field = 0x05;
   req.header.log_message_interval = 0x7F;
   // origintimestamp shall be 0 (not needed for PDELAY_REQ)
@@ -169,7 +176,8 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   memcpy(tx_buf, (void *)&req, sizeof(ptp_message_pdelay_req_t));
   while (!instance->stop) {
     instance->mutex_lock(instance->mutex);
-    int sent = instance->send(tx_buf, sizeof(ptp_message_pdelay_req_t));
+    int sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL, tx_buf,
+                              sizeof(ptp_message_pdelay_req_t));
     instance->latest_t3 = instance->get_time_ns_tx();
     // TODO: Handle error, incomplete send, etc.
     sequence_id++;
@@ -183,8 +191,14 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
 void ptp_thread_func(timesync_clock_t *instance) {
   uint8_t rx_buf[2048];
   uint8_t tx_buf[2048];
+  // We get this from the user-defined receive function
+  // It might be for example metadata about the sender and receiver (i.e. srcIp,
+  // srcPort, dstIp, dstPort)
+  // We don't do anything with it, we just give it back when sending
+  void *recv_metadata = NULL;
   while (!instance->stop) {
-    int amount_received = instance->receive(rx_buf, sizeof(rx_buf));
+    int amount_received =
+        instance->receive(&recv_metadata, rx_buf, sizeof(rx_buf));
     if (amount_received > 0) {
       uint64_t received_ts = instance->get_time_ns_rx();
       ptp_message_header_t *header = (ptp_message_header_t *)rx_buf;
@@ -239,7 +253,8 @@ void ptp_thread_func(timesync_clock_t *instance) {
         // Get the remaining ns
         received_ts = received_ts % 1000000000;
         ptp_message_pdelay_resp_t *resp = (ptp_message_pdelay_resp_t *)tx_buf;
-        resp->header = ptp_message_create_header(PTP_MESSAGE_TYPE_PDELAY_RESP);
+        resp->header =
+            ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_RESP);
         resp->header.sequence_id = msg->header.sequence_id;
         resp->requesting_port_identity = msg->header.source_port_identity;
         resp->request_receipt_timestamp.nanoseconds =
@@ -248,14 +263,15 @@ void ptp_thread_func(timesync_clock_t *instance) {
                6);
 
         int sent =
-            instance->send((uint8_t *)resp, sizeof(ptp_message_pdelay_resp_t));
+            instance->send(PTP_CONTROL_SEND_UNICAST, recv_metadata,
+                           (uint8_t *)resp, sizeof(ptp_message_pdelay_resp_t));
         // TODO: Check sent amount
         uint64_t sent_ts = instance->get_time_ns_tx();
         ptp_message_pdelay_resp_follow_up_t *fup =
             (ptp_message_pdelay_resp_follow_up_t *)tx_buf;
 
-        fup->header =
-            ptp_message_create_header(PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP);
+        fup->header = ptp_message_create_header(
+            instance, PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP);
         fup->header.sequence_id = msg->header.sequence_id;
         fup->requesting_port_identity = msg->header.source_port_identity;
         secs = htobe64(sent_ts / 1000000000);
@@ -264,7 +280,8 @@ void ptp_thread_func(timesync_clock_t *instance) {
         memcpy(fup->response_origin_timestamp.seconds, &((uint8_t *)secs)[2],
                6);
 
-        sent = instance->send((uint8_t *)fup,
+        sent = instance->send(PTP_CONTROL_SEND_UNICAST, recv_metadata,
+                              (uint8_t *)fup,
                               sizeof(ptp_message_pdelay_resp_follow_up_t));
         // TODO: Check sent amount
 

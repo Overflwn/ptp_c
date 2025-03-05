@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "ptp_control.h"
+
 // Workaround to stop clangd from warning about unterminated pragma pack
 // https://github.com/clangd/clangd/issues/1167
 static_assert(true, "");
@@ -33,23 +35,29 @@ typedef struct {
 #pragma pack(push, 1)
 typedef struct {
   uint8_t message_type : 4;
-  uint8_t transport_specific : 4;
+  uint8_t major_sdo_id : 4;
   uint8_t version : 4;
-  uint8_t reserved_1 : 4;
+  uint8_t minor_version : 4;
   uint16_t message_length;
   uint8_t domain_num;
-  uint8_t reserved_2;
+  uint8_t minor_sdo_id;
 
   union {
     uint16_t raw_val;
 
     struct {
+      /// @brief 0 := the port of the originator is in the MASTER state
       uint8_t alternative_master : 1;
+      /// @brief 0 := one step, 1 := two step
       uint8_t two_step : 1;
+      /// @brief Target address of this message was a unicast address
       uint8_t unicast : 1;
       uint8_t reserved_2 : 2;
+      /// @brief Defined by an alternative PTP template, otherwise 0
       uint8_t profile_specific_1 : 1;
+      /// @brief Defined by an alternative PTP template, otherwise 0
       uint8_t profile_specific_2 : 1;
+      /// @brief Used for the experimental security mechanism
       uint8_t security : 1;
       uint8_t leap_61 : 1;
       uint8_t leap_59 : 1;
@@ -61,18 +69,47 @@ typedef struct {
     };
   } flags;
 
+  /// @brief Used in all types of messages (mainly sync) to compensate for the
+  ///        transmission delay on the network, this is modified by transparent
+  ///        clocks (e.g. switches)
   uint64_t correction_field;
-  uint32_t reserved_3;
+  /// @brief Used to transmit the receive timestamp of some packets on the
+  ///        receive side
+  uint32_t message_type_specific;
+  /// @brief Indicates the ID and port number of the originating clock
   ptp_message_port_identity_t source_port_identity;
+  /// @brief Indicates the sequence number of the PTP message and the
+  ///        relationship between consecutive PTP messages
   uint16_t sequence_id;
+  /// @brief Depending on the message type:
+  ///        0x00 := Sync
+  ///        0x01 := Delay_Req
+  ///        0x02 := Follow_Up
+  ///        0x03 := Delay_Resp
+  ///        0x04 := Management
+  ///        0x05 := All others
+  ///        0x06 - 0xFF := Reserved
   uint8_t control_field;
+  /// @brief Indicates the interval for sending PTP messages, depending on the
+  ///        message type
+  ///        Announce := logAnnounceInterval for multicast, 0x7F for unicast
+  ///                    messages (TODO: Explain what logAnnounceInterval is...)
+  ///        Sync, Follow_Up := logSyncInterval for multicast, 0x7F for unicast
+  ///                           (TODO: Explain)
+  ///        Delay_Resp := logMinDelayReqInterval for multicast / unicast *or*
+  ///                      0x7F for unicast
+  ///        Delay_Req, Signaling, Management := 0x7F
+  ///        PDelay_Req := 0x7F or a value specified by the applicable PTP
+  ///        profile PDelay_Resp, PDelay_Resp_Follow_Up := 0x7F
   uint8_t log_message_interval;
 } ptp_message_header_t;
 #pragma pack(pop)
 
 #pragma pack(push, 1)
 typedef struct {
+  /// @brief The seconds portion of the timestamp (big endian)
   uint8_t seconds[6];
+  /// @brief The nanosecond portion of the timestamp (big endian)
   uint32_t nanoseconds;
 } ptp_message_timestamp_t;
 #pragma pack(pop)
@@ -94,8 +131,9 @@ typedef enum {
   PTP_CLOCK_CLASS_PRC_UNLOCKED = 7,
   PTP_CLOCK_CLASS_LOCKED_TO_APP_SPEC_TIMESCALE = 13,
   PTP_CLOCK_CLASS_UNLOCKED_FROM_APP_SPEC_TIME = 14,
-  PTP_CLOCK_CLASS_PRC_UNLOCKED_OUT_OF_SPEC = 52,          // May also be 187 (?)
-  PTP_CLOCK_CLASS_APP_SPECIFIC_UNLOCKED_OUT_OF_SPEC = 58, // May also be 193 (?)
+  PTP_CLOCK_CLASS_PRC_UNLOCKED_OUT_OF_SPEC = 52, // TODO: May also be 187 (?)
+  PTP_CLOCK_CLASS_APP_SPECIFIC_UNLOCKED_OUT_OF_SPEC =
+      58, // TODO: May also be 193 (?)
   PTP_CLOCK_CLASS_DEFAULT = 248,
   PTP_CLOCK_CLASS_SLAVE_ONLY_CLOCK = 255,
 } ptp_clock_class_t;
@@ -208,6 +246,7 @@ typedef struct {
 // } ptp_message_signaling_t;
 // #pragma pack(pop)
 
-ptp_message_header_t ptp_message_create_header(ptp_message_type_t message_type);
+ptp_message_header_t ptp_message_create_header(timesync_clock_t *instance,
+                                               ptp_message_type_t message_type);
 
 #endif /* PTP_MESSAGE_H */

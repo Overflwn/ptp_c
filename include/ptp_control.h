@@ -4,12 +4,19 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef enum {
+  /// @brief Whether the message to send is supposed to be sent multicast
+  PTP_CONTROL_SEND_MULTICAST,
+  /// @brief Whether the message to send is supposed to be sent unicast
+  PTP_CONTROL_SEND_UNICAST,
+} ptp_control_send_type_t;
+
 typedef uint64_t (*get_time_ns_cb)(void);
 typedef bool (*set_time_ns_cb)(uint64_t);
 typedef bool (*set_time_offset_ns_cb)(int64_t);
 typedef void (*sleep_ms_func)(uint32_t);
-typedef int (*receive_func)(uint8_t *, size_t);
-typedef int (*send_func)(uint8_t *, size_t);
+typedef int (*receive_func)(void **, uint8_t *, size_t);
+typedef int (*send_func)(ptp_control_send_type_t, void *, uint8_t *, size_t);
 typedef void *ptp_mutex_type_t;
 typedef void (*ptp_mutex_lock_func)(ptp_mutex_type_t);
 typedef void (*ptp_mutex_unlock_func)(ptp_mutex_type_t);
@@ -39,7 +46,7 @@ typedef struct ptp_delay_info_entry_s {
 typedef struct timesync_clock_s {
   /// @brief Callback to get the current time (after receiving a PTP frame)
   ///        NOTE: You might aswell pass a function that returns the timestamp
-  ///        of the last in- *or* outgoing PTP frame! This would be even more
+  ///        of the last inbound PTP frame! This would be even more
   ///        accurate then.
   ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
   ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
@@ -48,7 +55,7 @@ typedef struct timesync_clock_s {
 
   /// @brief Callback to get the current time (after sending a PTP frame)
   ///        NOTE: You might aswell pass a function that returns the timestamp
-  ///        of the last outgoing PTP frame! This would be even more
+  ///        of the last outbound PTP frame! This would be even more
   ///        accurate then.
   ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
   ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
@@ -83,6 +90,13 @@ typedef struct timesync_clock_s {
 
   /// @brief In what interval to cyclically send PDELAY_REQ messages in.
   uint32_t pdelay_req_interval_ms;
+
+  /// @brief The domain ID this clock belongs to (0-255)
+  uint8_t domain_id;
+  /// @brief The major SDO ID this clock belongs to (NOTE: 4 bit)
+  uint8_t major_sdo_id : 4;
+  /// @brief The minor SDO ID this clock belongs to (NOTE: 4 bit)
+  uint8_t minor_sdo_id : 4;
 
   // Internal variables, just set these to 0
   uint64_t current_delay_ns;
