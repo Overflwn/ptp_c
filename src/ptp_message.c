@@ -3,6 +3,7 @@ extern "C" {
 #endif
 
 #include "ptp_message.h"
+#include "util.h"
 
 ptp_message_header_t
 ptp_message_create_header(timesync_clock_t *instance,
@@ -25,36 +26,37 @@ ptp_message_create_header(timesync_clock_t *instance,
   header.flags.utc_offset_valid = 1;
   switch (message_type) {
   case PTP_MESSAGE_TYPE_SYNC:
-    header.message_length = sizeof(ptp_message_sync_t);
+    header.message_length = htobe16(sizeof(ptp_message_sync_t));
     header.control_field = 0x00;
     break;
   case PTP_MESSAGE_TYPE_DELAY_REQ:
-    header.message_length = sizeof(ptp_message_delay_req_t);
+    header.message_length = htobe16(sizeof(ptp_message_delay_req_t));
     header.control_field = 0x01;
     break;
   case PTP_MESSAGE_TYPE_FOLLOW_UP:
-    header.message_length = sizeof(ptp_message_follow_up_t);
+    header.message_length = htobe16(sizeof(ptp_message_follow_up_t));
     header.control_field = 0x02;
     break;
   case PTP_MESSAGE_TYPE_DELAY_RESP:
-    header.message_length = sizeof(ptp_message_delay_resp_t);
+    header.message_length = htobe16(sizeof(ptp_message_delay_resp_t));
     header.control_field = 0x03;
     break;
   // TODO: Management
   case PTP_MESSAGE_TYPE_PDELAY_REQ:
-    header.message_length = sizeof(ptp_message_pdelay_req_t);
+    header.message_length = htobe16(sizeof(ptp_message_pdelay_req_t));
     header.control_field = 0x05;
     break;
   case PTP_MESSAGE_TYPE_PDELAY_RESP:
-    header.message_length = sizeof(ptp_message_pdelay_resp_t);
+    header.message_length = htobe16(sizeof(ptp_message_pdelay_resp_t));
     header.control_field = 0x05;
     break;
   case PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP:
-    header.message_length = sizeof(ptp_message_pdelay_resp_follow_up_t);
+    header.message_length =
+        htobe16(sizeof(ptp_message_pdelay_resp_follow_up_t));
     header.control_field = 0x05;
     break;
   case PTP_MESSAGE_TYPE_ANNOUNCE:
-    header.message_length = sizeof(ptp_message_announce_t);
+    header.message_length = htobe16(sizeof(ptp_message_announce_t));
     header.control_field = 0x05;
     break;
   default:
