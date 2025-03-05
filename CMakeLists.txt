@@ -27,6 +27,10 @@ add_library(
 
 target_include_directories(${PROJECT_NAME} PUBLIC ./include)
 
+if(WIN32)
+  target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32)
+endif()
+
 enable_testing()
 
 add_executable(
