@@ -10,6 +10,7 @@ Currently this includes the following functions:
 - `get_timestamp_ns` (for Rx and Tx respectively): While being essential to PTP (that's the whole point basically), the decision was made to make the implementation of this function up to the user as there're lots of different ways a project might fetch these timestamps. This way the user can have the same function for both Rx / Tx or seperate ones and they can either get them via their PTP-enabled PHY for the highest accuracy or just refer to a software timestamp. Doesn't matter.
 - `set_time_ns` and `set_time_offset_ns`: Setting the time is project dependent. Another possibility would be storing the "current time" in the PTP clock instance as a variable, but currently there's no benefit in doing that. So currently the new time will get passed back to the user directly.
 - `send` and `receive`: Also platform dependent **and** transport layer dependent (Layer2 or IP), so I figured to let this be up to the user as the PTP protocol itself doesn't differ between those two transport layers.
+- `debug_log`: (**Optional**) Logging function passed by the user to let the library print out debug logs
 
 ## NOTE
 
