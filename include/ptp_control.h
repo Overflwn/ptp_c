@@ -1,3 +1,6 @@
+/// @file ptp_control.h
+///
+/// Main library entrypoint
 #ifndef PTP_CONTROL_H
 #define PTP_CONTROL_H
 #ifdef __cplusplus__
@@ -16,15 +19,56 @@ typedef enum {
   PTP_CONTROL_SEND_UNICAST,
 } ptp_control_send_type_t;
 
+/// @brief Callback function to retrieve a nanosecond timestamp.
+/// @return Timestamp in nanoseconds
 typedef uint64_t (*get_time_ns_cb)(void);
+
+/// @brief Callback function to set the time (nanosecond time).
+/// @param[in] timestamp Timestamp as uint64_t
+/// @return True on success
 typedef bool (*set_time_ns_cb)(uint64_t);
+
+/// @brief Callback function to offset the time (nanosecond offset).
+/// @param[in] offset Nanosecond offset as uint64_t
+/// @return True on success
 typedef bool (*set_time_offset_ns_cb)(int64_t);
+
+/// @brief Callback function to let the calling thread sleep
+/// @param[in] amount Time to sleep in milliseconds
 typedef void (*sleep_ms_func)(uint32_t);
+
+/// @brief Callback function to receive a new PTP frame. (**BLOCKING**)
+/// @param[out] metadata Receive "metadata" that will get passed back to the
+/// send callback, e.g. sender IP + Port information, or nothing
+/// @param[in] buffer Buffer to write the received data into
+/// @param[in] buffer_size Buffersize
+/// @return Amount of bytes received
 typedef int (*receive_func)(void **, uint8_t *, size_t);
+
+/// @brief Callback function to send a new PTP frame.
+/// @param[in] target_type Whether to send the PTP frame back to the sender (:=
+/// unicast) of
+///            the last received frame (-> good usecase for the "metadata") or
+///            multicast
+/// @param[in] metadata The "metadata" coming from the last receive call
+/// @param[in] buffer Buffer to send
+/// @param[in] amount Amount of bytes to send
+/// @return Amount of bytes sent
 typedef int (*send_func)(ptp_control_send_type_t, void *, uint8_t *, size_t);
+
+/// @brief Some kind of mutex type
 typedef void *ptp_mutex_type_t;
+
+/// @brief Callback function to lock a mutex
+/// @param[in] mutex The mutex to lock
 typedef void (*ptp_mutex_lock_func)(ptp_mutex_type_t);
+
+/// @brief Callback function to unlock a mutex
+/// @param[in] mutex The mutex to unlock
 typedef void (*ptp_mutex_unlock_func)(ptp_mutex_type_t);
+
+/// @brief Optional callback function to print debug logs
+/// @param[in] text Text to log
 typedef void (*debug_log_func)(const char *);
 
 typedef struct ptp_delay_info_s {
@@ -52,18 +96,22 @@ typedef struct ptp_delay_info_entry_s {
 ///         with the necessary callbacks and mutex.
 typedef struct timesync_clock_s {
   /// @brief Callback to get the current time (after receiving a PTP frame)
+  ///
   ///        NOTE: You might aswell pass a function that returns the timestamp
   ///        of the last inbound PTP frame! This would be even more
   ///        accurate then.
+  ///
   ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
   ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
   ///        you might aswell return 0 in these cases
   get_time_ns_cb get_time_ns_rx;
 
   /// @brief Callback to get the current time (after sending a PTP frame)
+  ///
   ///        NOTE: You might aswell pass a function that returns the timestamp
   ///        of the last outbound PTP frame! This would be even more
   ///        accurate then.
+  ///
   ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
   ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
   ///        you might aswell return 0 in these cases
@@ -120,6 +168,7 @@ typedef struct timesync_clock_s {
 
 /// @brief  This is the PDelay_REQ thread that cyclically sends out PDELAY_REQ
 ///         messages
+///
 ///         Run this as a thread function and pass your instance as the thread
 ///         data
 /// @param[in] instance The PTP instance
@@ -127,6 +176,7 @@ void ptp_req_thread_func(timesync_clock_t *instance);
 
 /// @brief  This a thread function that cyclically receives data and parses PTP
 ///         messages in order to handle them.
+///
 ///         Run this as a thread function and pass your instance as the thread
 ///         data
 /// @param[in] instance The PTP instance

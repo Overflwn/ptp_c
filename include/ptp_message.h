@@ -1,3 +1,6 @@
+/// @file ptp_message.h
+///
+/// General type and struct definitions used in the IEEE1588v2 protocol.
 #ifndef PTP_MESSAGE_H
 #define PTP_MESSAGE_H
 
@@ -84,25 +87,39 @@ typedef struct {
   ///        relationship between consecutive PTP messages
   uint16_t sequence_id;
   /// @brief Depending on the message type:
+  ///
   ///        0x00 := Sync
+  ///
   ///        0x01 := Delay_Req
+  ///
   ///        0x02 := Follow_Up
+  ///
   ///        0x03 := Delay_Resp
+  ///
   ///        0x04 := Management
+  ///
   ///        0x05 := All others
+  ///
   ///        0x06 - 0xFF := Reserved
   uint8_t control_field;
   /// @brief Indicates the interval for sending PTP messages, depending on the
   ///        message type
+  ///
   ///        Announce := logAnnounceInterval for multicast, 0x7F for unicast
   ///                    messages (TODO: Explain what logAnnounceInterval is...)
+  ///
   ///        Sync, Follow_Up := logSyncInterval for multicast, 0x7F for unicast
   ///                           (TODO: Explain)
+  ///
   ///        Delay_Resp := logMinDelayReqInterval for multicast / unicast *or*
   ///                      0x7F for unicast
+  ///
   ///        Delay_Req, Signaling, Management := 0x7F
+  ///
   ///        PDelay_Req := 0x7F or a value specified by the applicable PTP
-  ///        profile PDelay_Resp, PDelay_Resp_Follow_Up := 0x7F
+  ///                      profile
+  ///
+  ///        PDelay_Resp, PDelay_Resp_Follow_Up := 0x7F
   uint8_t log_message_interval;
 } ptp_message_header_t;
 #pragma pack(pop)
