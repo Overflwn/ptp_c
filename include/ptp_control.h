@@ -24,6 +24,7 @@ typedef int (*send_func)(ptp_control_send_type_t, void *, uint8_t *, size_t);
 typedef void *ptp_mutex_type_t;
 typedef void (*ptp_mutex_lock_func)(ptp_mutex_type_t);
 typedef void (*ptp_mutex_unlock_func)(ptp_mutex_type_t);
+typedef void (*debug_log_func)(const char *);
 
 typedef struct ptp_delay_info_s {
   uint64_t peer_id;
@@ -81,6 +82,9 @@ typedef struct timesync_clock_s {
 
   /// @brief Some kind of send function that sends a PTP frame
   send_func send;
+
+  /// @brief [Optional] A function used for logging
+  debug_log_func debug_log;
 
   /// @brief Flag to stop the thread
   bool stop;
