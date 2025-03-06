@@ -70,11 +70,13 @@ int send(ptp_control_send_type_t send_type, void *metadata, uint8_t *buf,
   memcpy(send_buf, buf, amount);
   send_size = amount;
   sent++;
-  return 0;
+  return send_size;
 }
 
 void mut_lock(ptp_mutex_type_t mutex) {}
 void mut_unlock(ptp_mutex_type_t mutex) {}
+
+void debug_log(const char *txt) { std::cout << txt << std::endl; }
 
 } // extern "C"
 
@@ -99,6 +101,7 @@ TEST(PtpControl, ControlSetup) {
   clock.mutex_lock = mut_lock;
   clock.mutex_unlock = mut_unlock;
   clock.pdelay_req_interval_ms = 500;
+  clock.use_p2p = true;
 
   std::thread t(ptp_req_thread_func, &clock);
   // Sleep less than the other thread is supposed to
@@ -146,6 +149,7 @@ TEST(PtpControl, ValidPDelayRequest) {
   clock.mutex_lock = mut_lock;
   clock.mutex_unlock = mut_unlock;
   clock.pdelay_req_interval_ms = 500;
+  clock.use_p2p = true;
 
   std::thread t(ptp_req_thread_func, &clock);
   // Sleep less than the other thread is supposed to
