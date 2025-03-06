@@ -4,6 +4,7 @@
 extern "C" {
 #endif
 
+#include "ptp_message.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -28,6 +29,7 @@ typedef void (*debug_log_func)(const char *);
 
 typedef struct ptp_delay_info_s {
   uint64_t peer_id;
+  uint16_t sequence_id_delay_req;
   uint64_t t1;
   uint64_t t2;
   uint64_t t3;
@@ -105,6 +107,11 @@ typedef struct timesync_clock_s {
   uint8_t major_sdo_id : 4;
   /// @brief The minor SDO ID this clock belongs to (NOTE: 4 bit)
   uint8_t minor_sdo_id : 4;
+
+  ptp_message_port_identity_t source_port_identity;
+
+  /// @brief Whether to use P2P for delay calculation instead of E2E
+  bool use_p2p;
 
   // Internal variables, just set these to 0
   uint64_t current_delay_ns;

@@ -9,8 +9,6 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "ptp_control.h"
-
 // Workaround to stop clangd from warning about unterminated pragma pack
 // https://github.com/clangd/clangd/issues/1167
 static_assert(true, "");
@@ -191,7 +189,7 @@ typedef struct {
 #pragma pack(push, 1)
 typedef struct {
   ptp_message_header_t header;
-  uint8_t reserved[10];
+  ptp_message_timestamp_t origin_timestamp;
 } ptp_message_sync_t;
 #pragma pack(pop)
 
@@ -249,9 +247,6 @@ typedef struct {
 //     uint8_t tlvs[];
 // } ptp_message_signaling_t;
 // #pragma pack(pop)
-
-ptp_message_header_t ptp_message_create_header(timesync_clock_t *instance,
-                                               ptp_message_type_t message_type);
 
 #ifdef __cplusplus__
 }

@@ -22,7 +22,7 @@ FetchContent_MakeAvailable(googletest)
 add_library(
     ${PROJECT_NAME}
     src/ptp_control.c
-    src/ptp_message.c
+    src/util.c
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC ./include)

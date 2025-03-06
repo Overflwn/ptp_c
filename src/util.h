@@ -5,6 +5,9 @@
 extern "C" {
 #endif
 
+#include "ptp_control.h"
+#include "ptp_message.h"
+
 // Headers for hton / ntoh
 #ifdef _WIN32
 #include <Winsock2.h>
@@ -30,6 +33,9 @@ extern "C" {
 #define be32toh(x) ntohl(x)
 #define be16toh(x) ntohs(x)
 #endif
+
+ptp_message_header_t ptp_message_create_header(timesync_clock_t *instance,
+                                               ptp_message_type_t message_type);
 
 #ifdef __cplusplus__
 }

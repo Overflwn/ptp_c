@@ -2,7 +2,6 @@
 extern "C" {
 #endif
 
-#include "ptp_message.h"
 #include "util.h"
 
 ptp_message_header_t
@@ -18,16 +17,17 @@ ptp_message_create_header(timesync_clock_t *instance,
       .domain_num = instance->domain_id,
       .minor_sdo_id = instance->minor_sdo_id,
       // Flags see below
+      .correction_field = 0,
       .message_type_specific = 0,
-      // TODO: Source port identity
+      .source_port_identity = instance->source_port_identity,
   };
   header.flags.raw_val = 0;
-  header.flags.two_step = 1;
   header.flags.utc_offset_valid = 1;
   switch (message_type) {
   case PTP_MESSAGE_TYPE_SYNC:
     header.message_length = htobe16(sizeof(ptp_message_sync_t));
     header.control_field = 0x00;
+    header.flags.two_step = 1;
     break;
   case PTP_MESSAGE_TYPE_DELAY_REQ:
     header.message_length = htobe16(sizeof(ptp_message_delay_req_t));
@@ -49,6 +49,7 @@ ptp_message_create_header(timesync_clock_t *instance,
   case PTP_MESSAGE_TYPE_PDELAY_RESP:
     header.message_length = htobe16(sizeof(ptp_message_pdelay_resp_t));
     header.control_field = 0x05;
+    header.flags.two_step = 1;
     break;
   case PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP:
     header.message_length =
