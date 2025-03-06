@@ -127,6 +127,39 @@ TEST(PtpControl, ControlSetup) {
   test_cleanup();
 }
 
+TEST(PtpControl, P2pDisabled) {
+  // Test whether the library correctly sets itself up and utilizes the given
+  // callbacks
+  timesync_clock_t clock = {0};
+  clock.domain_id = 1;
+  clock.get_time_ns_rx = get_time_ns;
+  clock.get_time_ns_tx = get_time_ns;
+  clock.set_time_ns = set_time_ns;
+  clock.set_time_offset_ns = set_time_offset;
+  clock.sleep_ms = sleep_ms;
+  clock.receive = receive;
+  clock.send = send;
+  clock.mutex = NULL;
+  clock.mutex_lock = mut_lock;
+  clock.mutex_unlock = mut_unlock;
+  clock.pdelay_req_interval_ms = 500;
+  clock.use_p2p = false;
+
+  std::thread t(ptp_req_thread_func, &clock);
+  // Sleep less than the other thread is supposed to
+  // -> thread should've sent only once (and sent only once)
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  clock.stop = true;
+  t.join();
+  EXPECT_TRUE(send_buf == nullptr);
+  EXPECT_EQ(send_size, 0);
+  EXPECT_EQ(sleeped, 1);
+  EXPECT_EQ(sent, 0);
+  EXPECT_EQ(last_sleep, 500);
+
+  test_cleanup();
+}
+
 TEST(PtpControl, ValidPDelayRequest) {
   // Test whether the library correctly sets itself up and utilizes the given
   // callbacks
