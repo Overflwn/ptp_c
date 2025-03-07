@@ -21,17 +21,17 @@ typedef enum {
 
 /// @brief Callback function to retrieve a nanosecond timestamp.
 /// @return Timestamp in nanoseconds
-typedef uint64_t (*get_time_ns_cb)(void);
+typedef uint64_t (*get_time_ns_cb)(void *);
 
 /// @brief Callback function to set the time (nanosecond time).
 /// @param[in] timestamp Timestamp as uint64_t
 /// @return True on success
-typedef bool (*set_time_ns_cb)(uint64_t);
+typedef bool (*set_time_ns_cb)(void *, uint64_t);
 
 /// @brief Callback function to offset the time (nanosecond offset).
 /// @param[in] offset Nanosecond offset as uint64_t
 /// @return True on success
-typedef bool (*set_time_offset_ns_cb)(int64_t);
+typedef bool (*set_time_offset_ns_cb)(void *, int64_t);
 
 /// @brief Callback function to let the calling thread sleep
 /// @param[in] amount Time to sleep in milliseconds
@@ -43,7 +43,7 @@ typedef void (*sleep_ms_func)(uint32_t);
 /// @param[in] buffer Buffer to write the received data into
 /// @param[in] buffer_size Buffersize
 /// @return Amount of bytes received, 0 for no data and <0 for error
-typedef int (*receive_func)(void **, uint8_t *, size_t);
+typedef int (*receive_func)(void *, void **, uint8_t *, size_t);
 
 /// @brief Callback function to send a new PTP frame.
 /// @param[in] target_type Whether to send the PTP frame back to the sender (:=
@@ -54,7 +54,8 @@ typedef int (*receive_func)(void **, uint8_t *, size_t);
 /// @param[in] buffer Buffer to send
 /// @param[in] amount Amount of bytes to send
 /// @return Amount of bytes sent
-typedef int (*send_func)(ptp_control_send_type_t, void *, uint8_t *, size_t);
+typedef int (*send_func)(void *, ptp_control_send_type_t, void *, uint8_t *,
+                         size_t);
 
 /// @brief Some kind of mutex type
 typedef void *ptp_mutex_type_t;
@@ -69,7 +70,7 @@ typedef void (*ptp_mutex_unlock_func)(ptp_mutex_type_t);
 
 /// @brief Optional callback function to print debug logs
 /// @param[in] text Text to log
-typedef void (*debug_log_func)(const char *);
+typedef void (*debug_log_func)(void *, const char *);
 
 typedef struct ptp_delay_info_s {
   uint64_t peer_id;
@@ -184,6 +185,9 @@ typedef struct timesync_clock_s {
 
   /// @brief Whether to use P2P for delay calculation instead of E2E
   bool use_p2p;
+
+  /// @brief Arbitrary userdata that will be passed to every callback function
+  void *userdata;
 
   // Internal variables, just set these to 0
   uint64_t latest_t3;

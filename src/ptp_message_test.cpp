@@ -37,14 +37,14 @@ static void test_cleanup() {
   sent = 0;
 }
 
-uint64_t get_time_ns(void) { return cur_time; }
+uint64_t get_time_ns(void *userdata) { return cur_time; }
 
-bool set_time_ns(uint64_t new_time) {
+bool set_time_ns(void *userdata, uint64_t new_time) {
   cur_time = new_time;
   return true;
 }
 
-bool set_time_offset(int64_t offset) {
+bool set_time_offset(void *userdata, int64_t offset) {
   if (offset < 0 && cur_time < (uint64_t)(offset * -1)) {
     return false;
   }
@@ -58,9 +58,11 @@ void sleep_ms(uint32_t ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
-int receive(void **metadata, uint8_t *buf, size_t buf_size) { return 0; }
-int send(ptp_control_send_type_t send_type, void *metadata, uint8_t *buf,
-         size_t amount) {
+int receive(void *userdata, void **metadata, uint8_t *buf, size_t buf_size) {
+  return 0;
+}
+int send(void *userdata, ptp_control_send_type_t send_type, void *metadata,
+         uint8_t *buf, size_t amount) {
   if (send_buf) {
     free(send_buf);
     send_size = 0;
@@ -76,7 +78,9 @@ int send(ptp_control_send_type_t send_type, void *metadata, uint8_t *buf,
 void mut_lock(ptp_mutex_type_t mutex) {}
 void mut_unlock(ptp_mutex_type_t mutex) {}
 
-void debug_log(const char *txt) { std::cout << txt << std::endl; }
+void debug_log(void *userdata, const char *txt) {
+  std::cout << txt << std::endl;
+}
 
 } // extern "C"
 

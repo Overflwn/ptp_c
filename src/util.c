@@ -3,6 +3,7 @@ extern "C" {
 #endif
 
 #include "util.h"
+#include <math.h>
 
 ptp_message_header_t
 ptp_message_create_header(timesync_clock_t *instance,
@@ -20,6 +21,7 @@ ptp_message_create_header(timesync_clock_t *instance,
       .correction_field = 0,
       .message_type_specific = 0,
       .source_port_identity = instance->source_port_identity,
+      .log_message_interval = 0x7F,
   };
   header.flags.raw_val = 0;
   header.flags.utc_offset_valid = 1;
@@ -28,6 +30,8 @@ ptp_message_create_header(timesync_clock_t *instance,
     header.message_length = htobe16(sizeof(ptp_message_sync_t));
     header.control_field = 0x00;
     header.flags.two_step = 1;
+    header.log_message_interval =
+        (uint8_t)log((double)instance->master.sync_msg_interval_ms / 1000.0);
     break;
   case PTP_MESSAGE_TYPE_DELAY_REQ:
     header.message_length = htobe16(sizeof(ptp_message_delay_req_t));
@@ -36,6 +40,8 @@ ptp_message_create_header(timesync_clock_t *instance,
   case PTP_MESSAGE_TYPE_FOLLOW_UP:
     header.message_length = htobe16(sizeof(ptp_message_follow_up_t));
     header.control_field = 0x02;
+    header.log_message_interval =
+        (uint8_t)log((double)instance->master.sync_msg_interval_ms / 1000.0);
     break;
   case PTP_MESSAGE_TYPE_DELAY_RESP:
     header.message_length = htobe16(sizeof(ptp_message_delay_resp_t));
@@ -59,6 +65,8 @@ ptp_message_create_header(timesync_clock_t *instance,
   case PTP_MESSAGE_TYPE_ANNOUNCE:
     header.message_length = htobe16(sizeof(ptp_message_announce_t));
     header.control_field = 0x05;
+    header.log_message_interval = (uint8_t)log(
+        (double)instance->master.announce_msg_interval_ms / 1000.0);
     break;
   default:
     // TODO: Other message types

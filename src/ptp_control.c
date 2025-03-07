@@ -110,11 +110,12 @@ static uint64_t ts_to_ns(const ptp_message_timestamp_t *ts) {
 /// @param[in] ts The timestamp to convert
 /// @return The converted timestamp or 0 on error
 static ptp_message_timestamp_t ns_to_ts(uint64_t ts) {
-  uint64_t temp = htobe64(ts);
+  uint64_t temp_secs = htobe64(ts / 1000000000);
+  uint64_t temp = ts % 1000000000;
   ptp_message_timestamp_t result = {0};
   uint64_t temp_secs_be = 0;
-  memcpy(result.seconds, &((uint8_t *)(&temp))[2], sizeof(result.seconds));
-  result.nanoseconds = htobe32(temp % 1000000000);
+  memcpy(result.seconds, &((uint8_t *)(&temp_secs))[2], sizeof(result.seconds));
+  result.nanoseconds = htobe32(temp);
   return result;
 }
 
@@ -134,14 +135,14 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   while (!instance->stop) {
     if (instance->use_p2p) {
       instance->mutex_lock(instance->mutex);
-      int sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL, tx_buf,
-                                sizeof(ptp_message_pdelay_req_t));
+      int sent = instance->send(instance->userdata, PTP_CONTROL_SEND_MULTICAST,
+                                NULL, tx_buf, sizeof(ptp_message_pdelay_req_t));
       if (sent < sizeof(ptp_message_pdelay_req_t) && instance->debug_log) {
         snprintf(log_buf, sizeof(log_buf),
                  "Failed to send PDelay_Req. (returnval %d)", sent);
-        instance->debug_log(log_buf);
+        instance->debug_log(instance->userdata, log_buf);
       }
-      instance->latest_t3 = instance->get_time_ns_tx();
+      instance->latest_t3 = instance->get_time_ns_tx(instance->userdata);
       // TODO: Handle error, incomplete send, etc.
       sequence_id++;
       req.header.sequence_id = htons(sequence_id);
@@ -162,20 +163,23 @@ static void calculate_new_time(timesync_clock_t *instance,
                       (int64_t)delay_info->delay_info.t1) -
                      (int64_t)delay_info->delay_info.last_calculated_delay;
     // TODO: Check returnval
-    instance->set_time_offset_ns(offset);
+    instance->set_time_offset_ns(instance->userdata, offset);
     instance->statistics.last_offset_ns = offset;
-    instance->statistics.last_sync_ts = instance->get_time_ns();
+    instance->statistics.last_sync_ts =
+        instance->get_time_ns(instance->userdata);
     instance->statistics.last_delay_ns =
         delay_info->delay_info.last_calculated_delay;
   } else if (instance->debug_log) {
     // TODO: Notify user?
     instance->debug_log(
+        instance->userdata,
         "No delay has been calculated yet, ignoring new time..");
   }
 
   if (!instance->use_p2p) {
     if (instance->debug_log) {
       instance->debug_log(
+          instance->userdata,
           "Not using P2P for delay calculation, sending DELAY_REQ..");
     }
 
@@ -186,16 +190,17 @@ static void calculate_new_time(timesync_clock_t *instance,
     resp->header.sequence_id =
         htobe16(delay_info->delay_info.sequence_id_delay_req);
 
-    int sent = instance->send(PTP_CONTROL_SEND_UNICAST, recv_metadata,
-                              (uint8_t *)resp, sizeof(ptp_message_delay_req_t));
-    uint64_t sent_ts = instance->get_time_ns_tx();
+    int sent = instance->send(instance->userdata, PTP_CONTROL_SEND_UNICAST,
+                              recv_metadata, (uint8_t *)resp,
+                              sizeof(ptp_message_delay_req_t));
+    uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
     if (sent < sizeof(ptp_message_delay_req_t) && instance->debug_log) {
       snprintf(log_buf, sizeof(log_buf),
                "Failed to send DELAY_REQ message. (returnval %d)", sent);
-      instance->debug_log(log_buf);
+      instance->debug_log(instance->userdata, log_buf);
     } else {
       if (instance->debug_log) {
-        instance->debug_log("DELAY_REQ sent.");
+        instance->debug_log(instance->userdata, "DELAY_REQ sent.");
       }
       delay_info->delay_info.t3 = sent_ts;
       delay_info->delay_info.sequence_id_delay_req++;
@@ -215,222 +220,269 @@ void ptp_thread_func(timesync_clock_t *instance) {
   uint32_t announce_time = 0;
   uint32_t sync_time = 0;
   while (!instance->stop) {
-    int amount_received =
-        instance->receive(&recv_metadata, rx_buf, sizeof(rx_buf));
+    int amount_received = instance->receive(instance->userdata, &recv_metadata,
+                                            rx_buf, sizeof(rx_buf));
     if (amount_received > 0) {
-      uint64_t received_ts = instance->get_time_ns_rx();
+      uint64_t received_ts = instance->get_time_ns_rx(instance->userdata);
       ptp_message_header_t *header = (ptp_message_header_t *)rx_buf;
-      instance->mutex_lock(instance->mutex);
-      switch (header->message_type) {
-      case PTP_MESSAGE_TYPE_SYNC: {
-        if (instance->debug_log) {
-          instance->debug_log("Received SYNC message");
-        }
-        if (instance->clock_type == PTP_CLOCK_TYPE_MASTER) {
+      // Ignore messages that looped back from ourselves
+      if (0 != memcmp(&header->source_port_identity,
+                      &instance->source_port_identity,
+                      sizeof(header->source_port_identity))) {
+        instance->mutex_lock(instance->mutex);
+        switch (header->message_type) {
+        case PTP_MESSAGE_TYPE_SYNC: {
           if (instance->debug_log) {
-            instance->debug_log("We're set as master, ignoring SYNC...");
+            instance->debug_log(instance->userdata, "Received SYNC message");
           }
-          break;
-        }
-        ptp_message_sync_t *msg = (ptp_message_sync_t *)rx_buf;
-        ptp_delay_info_entry_t *delay_info = get_or_new_delay_info(
-            instance, port_identity_to_id(&msg->header.source_port_identity));
-        if (delay_info != NULL) {
-          delay_info->delay_info.t2 = received_ts;
-          if (!msg->header.flags.two_step) {
+          if (instance->clock_type == PTP_CLOCK_TYPE_MASTER) {
             if (instance->debug_log) {
-              instance->debug_log("Master uses one-step sync");
+              instance->debug_log(instance->userdata,
+                                  "We're set as master, ignoring SYNC...");
             }
-            delay_info->delay_info.t1 = ts_to_ns(&msg->origin_timestamp);
-            calculate_new_time(instance, delay_info, recv_metadata, tx_buf);
-          } // else adjust after FOLLOW_UP
-        } else if (instance->debug_log) {
-          snprintf(log_buf, sizeof(log_buf),
-                   "Failed to get or create new delay_info.");
-          instance->debug_log(log_buf);
-        }
-        // TODO: Handle
-        break;
-      }
-      case PTP_MESSAGE_TYPE_DELAY_REQ: {
-        if (instance->debug_log) {
-          instance->debug_log("Received DELAY_REQ message");
-        }
-        ptp_message_delay_req_t *msg = (ptp_message_delay_req_t *)rx_buf;
-        // TODO: Handle E2E delay req
-        break;
-      }
-      case PTP_MESSAGE_TYPE_FOLLOW_UP: {
-        if (instance->debug_log) {
-          instance->debug_log("Received FOLLOW_UP message");
-        }
-        if (instance->clock_type == PTP_CLOCK_TYPE_MASTER) {
-          if (instance->debug_log) {
-            instance->debug_log("We're set as master, ignoring SYNC...");
+            break;
           }
-          break;
-        }
-        ptp_message_follow_up_t *msg = (ptp_message_follow_up_t *)rx_buf;
-        uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
-        ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
-        // TODO: Check if sequence_id is reasonable (== sequence_id from last
-        // SYNC message)
-        if (delay_info != NULL) {
-          delay_info->delay_info.t1 = ts_to_ns(&msg->precise_origin_timestamp);
-          calculate_new_time(instance, delay_info, recv_metadata, tx_buf);
-        } else if (instance->debug_log) {
-          instance->debug_log("No delay_info for sender, ignoring FOLLOW_UP");
-        }
-        break;
-      }
-      case PTP_MESSAGE_TYPE_DELAY_RESP: {
-        if (instance->debug_log) {
-          instance->debug_log("Received DELAY_RESP message");
-        }
-        ptp_message_delay_resp_t *msg = (ptp_message_delay_resp_t *)rx_buf;
-        uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
-        ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
-        if (delay_info) {
-          // TODO: Check "requesting source port identity" (if it is ours)
-          delay_info->delay_info.t4 = ts_to_ns(&msg->receive_timestamp);
-
-          if (delay_info->delay_info.t1 != 0 &&
-              delay_info->delay_info.t2 != 0 &&
-              delay_info->delay_info.t3 != 0 &&
-              delay_info->delay_info.t4 != 0) {
-            int64_t t1 = (int64_t)delay_info->delay_info.t1;
-            int64_t t2 = (int64_t)delay_info->delay_info.t2;
-            int64_t t3 = (int64_t)delay_info->delay_info.t3;
-            int64_t t4 = (int64_t)delay_info->delay_info.t4;
-            delay_info->delay_info.last_calculated_delay =
-                (uint64_t)(((t2 - t1) + (t4 - t3)) / 2);
+          ptp_message_sync_t *msg = (ptp_message_sync_t *)rx_buf;
+          ptp_delay_info_entry_t *delay_info = get_or_new_delay_info(
+              instance, port_identity_to_id(&msg->header.source_port_identity));
+          if (delay_info != NULL) {
+            delay_info->delay_info.t2 = received_ts;
+            if (!msg->header.flags.two_step) {
+              if (instance->debug_log) {
+                instance->debug_log(instance->userdata,
+                                    "Master uses one-step sync");
+              }
+              delay_info->delay_info.t1 = ts_to_ns(&msg->origin_timestamp);
+              calculate_new_time(instance, delay_info, recv_metadata, tx_buf);
+            } // else adjust after FOLLOW_UP
           } else if (instance->debug_log) {
             snprintf(log_buf, sizeof(log_buf),
-                     "Can't calculate E2E delay, invalid state. (t1 := %" PRIu64
-                     ", t2 := %" PRIu64 ", t3 := %" PRIu64 ", t4 := %" PRIu64,
-                     delay_info->delay_info.t1, delay_info->delay_info.t2,
-                     delay_info->delay_info.t3, delay_info->delay_info.t4);
-            instance->debug_log(log_buf);
+                     "Failed to get or create new delay_info.");
+            instance->debug_log(instance->userdata, log_buf);
           }
-        } else if (instance->debug_log) {
-          instance->debug_log("No delay_info for DELAY_RESP sender.");
+          // TODO: Handle
+          break;
         }
-        break;
-      }
-      case PTP_MESSAGE_TYPE_PDELAY_REQ: {
-        if (instance->debug_log) {
-          instance->debug_log("Received PDELAY_REQ message");
+        case PTP_MESSAGE_TYPE_DELAY_REQ: {
+          if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "Received DELAY_REQ message");
+          }
+          ptp_message_delay_req_t *msg = (ptp_message_delay_req_t *)rx_buf;
+          ptp_message_delay_resp_t *resp = (ptp_message_delay_resp_t *)tx_buf;
+          memset(resp, 0, sizeof(ptp_message_delay_resp_t));
+          resp->header =
+              ptp_message_create_header(instance, PTP_MESSAGE_TYPE_DELAY_RESP);
+          resp->receive_timestamp = ns_to_ts(received_ts);
+          resp->requesting_port_identity = msg->header.source_port_identity;
+          int sent = instance->send(
+              instance->userdata, PTP_CONTROL_SEND_UNICAST, recv_metadata,
+              (uint8_t *)resp, sizeof(ptp_message_delay_resp_t));
+          if (sent < sizeof(ptp_message_delay_resp_t) && instance->debug_log) {
+            snprintf(log_buf, sizeof(log_buf),
+                     "Failed to send DELAY_RESP. (returnval: %d)", sent);
+            instance->debug_log(instance->userdata, log_buf);
+          }
+          // TODO: Handle E2E delay req
+          break;
         }
-        ptp_message_pdelay_req_t *msg = (ptp_message_pdelay_req_t *)rx_buf;
-        uint64_t secs = htobe64(received_ts / 1000000000);
-        // Get the remaining ns
-        received_ts = received_ts % 1000000000;
-        ptp_message_pdelay_resp_t *resp = (ptp_message_pdelay_resp_t *)tx_buf;
-        resp->header =
-            ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_RESP);
-        resp->header.sequence_id = msg->header.sequence_id;
-        resp->requesting_port_identity = msg->header.source_port_identity;
-        resp->request_receipt_timestamp.nanoseconds =
-            htobe32((uint32_t)received_ts);
-        memcpy(resp->request_receipt_timestamp.seconds, &((uint8_t *)secs)[2],
-               6);
+        case PTP_MESSAGE_TYPE_FOLLOW_UP: {
+          if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "Received FOLLOW_UP message");
+          }
+          if (instance->clock_type == PTP_CLOCK_TYPE_MASTER) {
+            if (instance->debug_log) {
+              instance->debug_log(instance->userdata,
+                                  "We're set as master, ignoring SYNC...");
+            }
+            break;
+          }
+          ptp_message_follow_up_t *msg = (ptp_message_follow_up_t *)rx_buf;
+          uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
+          ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
+          // TODO: Check if sequence_id is reasonable (== sequence_id from last
+          // SYNC message)
+          if (delay_info != NULL) {
+            delay_info->delay_info.t1 =
+                ts_to_ns(&msg->precise_origin_timestamp);
+            calculate_new_time(instance, delay_info, recv_metadata, tx_buf);
+          } else if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "No delay_info for sender, ignoring FOLLOW_UP");
+          }
+          break;
+        }
+        case PTP_MESSAGE_TYPE_DELAY_RESP: {
+          if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "Received DELAY_RESP message");
+          }
+          ptp_message_delay_resp_t *msg = (ptp_message_delay_resp_t *)rx_buf;
+          uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
+          ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
+          if (delay_info) {
+            // TODO: Check "requesting source port identity" (if it is ours)
+            delay_info->delay_info.t4 = ts_to_ns(&msg->receive_timestamp);
 
-        int sent =
-            instance->send(PTP_CONTROL_SEND_UNICAST, recv_metadata,
-                           (uint8_t *)resp, sizeof(ptp_message_pdelay_resp_t));
-        if (sent < sizeof(ptp_message_pdelay_resp_t) && instance->debug_log) {
-          snprintf(log_buf, sizeof(log_buf),
-                   "Failed to send PDELAY_RESP message. (returnval %d)", sent);
-          instance->debug_log(log_buf);
-        } else {
-          // TODO: Check sent amount
-          uint64_t sent_ts = instance->get_time_ns_tx();
-          ptp_message_pdelay_resp_follow_up_t *fup =
-              (ptp_message_pdelay_resp_follow_up_t *)tx_buf;
-
-          fup->header = ptp_message_create_header(
-              instance, PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP);
-          fup->header.sequence_id = msg->header.sequence_id;
-          fup->requesting_port_identity = msg->header.source_port_identity;
-          secs = htobe64(sent_ts / 1000000000);
-          uint32_t sent_ns = htobe32(sent_ts % 1000000000);
-          fup->response_origin_timestamp.nanoseconds = sent_ns;
-          memcpy(fup->response_origin_timestamp.seconds, &((uint8_t *)secs)[2],
+            if (delay_info->delay_info.t1 != 0 &&
+                delay_info->delay_info.t2 != 0 &&
+                delay_info->delay_info.t3 != 0 &&
+                delay_info->delay_info.t4 != 0) {
+              int64_t t1 = (int64_t)delay_info->delay_info.t1;
+              int64_t t2 = (int64_t)delay_info->delay_info.t2;
+              int64_t t3 = (int64_t)delay_info->delay_info.t3;
+              int64_t t4 = (int64_t)delay_info->delay_info.t4;
+              if (instance->debug_log) {
+                snprintf(log_buf, sizeof(log_buf),
+                         "New delay (%" PRIu64 "). (t1 := %" PRIu64
+                         ", t2 := %" PRIu64 ", t3 := %" PRIu64
+                         ", t4 := %" PRIu64,
+                         (uint64_t)(((t2 - t1) + (t4 - t3)) / 2),
+                         delay_info->delay_info.t1, delay_info->delay_info.t2,
+                         delay_info->delay_info.t3, delay_info->delay_info.t4);
+                instance->debug_log(instance->userdata, log_buf);
+              }
+              delay_info->delay_info.last_calculated_delay =
+                  (uint64_t)(((t2 - t1) + (t4 - t3)) / 2);
+            } else if (instance->debug_log) {
+              snprintf(
+                  log_buf, sizeof(log_buf),
+                  "Can't calculate E2E delay, invalid state. (t1 := %" PRIu64
+                  ", t2 := %" PRIu64 ", t3 := %" PRIu64 ", t4 := %" PRIu64,
+                  delay_info->delay_info.t1, delay_info->delay_info.t2,
+                  delay_info->delay_info.t3, delay_info->delay_info.t4);
+              instance->debug_log(instance->userdata, log_buf);
+            }
+          } else if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "No delay_info for DELAY_RESP sender.");
+          }
+          break;
+        }
+        case PTP_MESSAGE_TYPE_PDELAY_REQ: {
+          if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "Received PDELAY_REQ message");
+          }
+          ptp_message_pdelay_req_t *msg = (ptp_message_pdelay_req_t *)rx_buf;
+          uint64_t secs = htobe64(received_ts / 1000000000);
+          // Get the remaining ns
+          received_ts = received_ts % 1000000000;
+          ptp_message_pdelay_resp_t *resp = (ptp_message_pdelay_resp_t *)tx_buf;
+          resp->header =
+              ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_RESP);
+          resp->header.sequence_id = msg->header.sequence_id;
+          resp->requesting_port_identity = msg->header.source_port_identity;
+          resp->request_receipt_timestamp.nanoseconds =
+              htobe32((uint32_t)received_ts);
+          memcpy(resp->request_receipt_timestamp.seconds, &((uint8_t *)secs)[2],
                  6);
 
-          sent = instance->send(PTP_CONTROL_SEND_UNICAST, recv_metadata,
-                                (uint8_t *)fup,
-                                sizeof(ptp_message_pdelay_resp_follow_up_t));
-          if (sent < sizeof(ptp_message_pdelay_resp_follow_up_t) &&
-              instance->debug_log) {
-            snprintf(
-                log_buf, sizeof(log_buf),
-                "Failed to send PDELAY_RESP_FOLLOW_UP message. (returnval %d)",
-                sent);
-            instance->debug_log(log_buf);
-          }
-        }
-        break;
-      }
-      case PTP_MESSAGE_TYPE_PDELAY_RESP: {
-        if (instance->debug_log) {
-          instance->debug_log("Received PDELAY_RESP message");
-        }
-        ptp_message_pdelay_resp_t *msg = (ptp_message_pdelay_resp_t *)rx_buf;
-        uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
-        ptp_delay_info_entry_t *delay_info =
-            get_or_new_delay_info(instance, id);
-        if (delay_info != NULL) {
-          // TODO: Check sequence_id to be safe
-          uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
-          delay_info->delay_info.t3 = instance->latest_t3;
-          delay_info->delay_info.t4 = ts;
-          delay_info->delay_info.t6 = received_ts;
-        } else if (instance->debug_log) {
-          // TODO: Handle erroneous state
-          instance->debug_log("No delay_info found for PDELAY_RESP sender.");
-        }
-        break;
-      }
-      case PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP: {
-        if (instance->debug_log) {
-          instance->debug_log("Received PDELAY_RESP_FOLLOW_UP message");
-        }
-        ptp_message_pdelay_resp_follow_up_t *msg =
-            (ptp_message_pdelay_resp_follow_up_t *)rx_buf;
-        uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
-        ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
-        if (delay_info != NULL) {
-          uint64_t ts = ts_to_ns(&msg->response_origin_timestamp);
-          delay_info->delay_info.t5 = ts;
-          uint64_t t3 = delay_info->delay_info.t3;
-          uint64_t t4 = delay_info->delay_info.t4;
-          uint64_t t5 = delay_info->delay_info.t5;
-          uint64_t t6 = delay_info->delay_info.t6;
-          if (t3 != 0 && t4 != 0 && t5 != 0 && t6 != 0) {
-            uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
-            delay_info->delay_info.last_calculated_delay = delay;
-          } else if (instance->debug_log) {
-            // TODO: Handle weird state
+          int sent = instance->send(
+              instance->userdata, PTP_CONTROL_SEND_UNICAST, recv_metadata,
+              (uint8_t *)resp, sizeof(ptp_message_pdelay_resp_t));
+          if (sent < sizeof(ptp_message_pdelay_resp_t) && instance->debug_log) {
             snprintf(log_buf, sizeof(log_buf),
-                     "Failed to calculate new peer delay. (t3: %" PRIu64
-                     ", t4: %" PRIu64 ", "
-                     "t5: %" PRIu64 ", t6: %" PRIu64 ")",
-                     t3, t4, t5, t6);
-            instance->debug_log(log_buf);
+                     "Failed to send PDELAY_RESP message. (returnval %d)",
+                     sent);
+            instance->debug_log(instance->userdata, log_buf);
+          } else {
+            // TODO: Check sent amount
+            uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
+            ptp_message_pdelay_resp_follow_up_t *fup =
+                (ptp_message_pdelay_resp_follow_up_t *)tx_buf;
+
+            fup->header = ptp_message_create_header(
+                instance, PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP);
+            fup->header.sequence_id = msg->header.sequence_id;
+            fup->requesting_port_identity = msg->header.source_port_identity;
+            secs = htobe64(sent_ts / 1000000000);
+            uint32_t sent_ns = htobe32(sent_ts % 1000000000);
+            fup->response_origin_timestamp.nanoseconds = sent_ns;
+            memcpy(fup->response_origin_timestamp.seconds,
+                   &((uint8_t *)secs)[2], 6);
+
+            sent = instance->send(instance->userdata, PTP_CONTROL_SEND_UNICAST,
+                                  recv_metadata, (uint8_t *)fup,
+                                  sizeof(ptp_message_pdelay_resp_follow_up_t));
+            if (sent < sizeof(ptp_message_pdelay_resp_follow_up_t) &&
+                instance->debug_log) {
+              snprintf(log_buf, sizeof(log_buf),
+                       "Failed to send PDELAY_RESP_FOLLOW_UP message. "
+                       "(returnval %d)",
+                       sent);
+              instance->debug_log(instance->userdata, log_buf);
+            }
           }
-        } else if (instance->debug_log) {
-          instance->debug_log(
-              "No delay_info found for PDELAY_RESP_FOLLOW_UP sender");
+          break;
         }
-        break;
+        case PTP_MESSAGE_TYPE_PDELAY_RESP: {
+          if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "Received PDELAY_RESP message");
+          }
+          ptp_message_pdelay_resp_t *msg = (ptp_message_pdelay_resp_t *)rx_buf;
+          uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
+          ptp_delay_info_entry_t *delay_info =
+              get_or_new_delay_info(instance, id);
+          if (delay_info != NULL) {
+            // TODO: Check sequence_id to be safe
+            uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
+            delay_info->delay_info.t3 = instance->latest_t3;
+            delay_info->delay_info.t4 = ts;
+            delay_info->delay_info.t6 = received_ts;
+          } else if (instance->debug_log) {
+            // TODO: Handle erroneous state
+            instance->debug_log(instance->userdata,
+                                "No delay_info found for PDELAY_RESP sender.");
+          }
+          break;
+        }
+        case PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP: {
+          if (instance->debug_log) {
+            instance->debug_log(instance->userdata,
+                                "Received PDELAY_RESP_FOLLOW_UP message");
+          }
+          ptp_message_pdelay_resp_follow_up_t *msg =
+              (ptp_message_pdelay_resp_follow_up_t *)rx_buf;
+          uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
+          ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
+          if (delay_info != NULL) {
+            uint64_t ts = ts_to_ns(&msg->response_origin_timestamp);
+            delay_info->delay_info.t5 = ts;
+            uint64_t t3 = delay_info->delay_info.t3;
+            uint64_t t4 = delay_info->delay_info.t4;
+            uint64_t t5 = delay_info->delay_info.t5;
+            uint64_t t6 = delay_info->delay_info.t6;
+            if (t3 != 0 && t4 != 0 && t5 != 0 && t6 != 0) {
+              uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
+              delay_info->delay_info.last_calculated_delay = delay;
+            } else if (instance->debug_log) {
+              // TODO: Handle weird state
+              snprintf(log_buf, sizeof(log_buf),
+                       "Failed to calculate new peer delay. (t3: %" PRIu64
+                       ", t4: %" PRIu64 ", "
+                       "t5: %" PRIu64 ", t6: %" PRIu64 ")",
+                       t3, t4, t5, t6);
+              instance->debug_log(instance->userdata, log_buf);
+            }
+          } else if (instance->debug_log) {
+            instance->debug_log(
+                instance->userdata,
+                "No delay_info found for PDELAY_RESP_FOLLOW_UP sender");
+          }
+          break;
+        }
+        }
+        instance->mutex_unlock(instance->mutex);
+      } else {
+        int x = 5;
       }
-      }
-      instance->mutex_unlock(instance->mutex);
     } else if (amount_received < 0 && instance->debug_log) {
-      snprintf(log_buf, sizeof(log_buf),
-               "Failed to receive data. (returnval %d)", amount_received);
-      instance->debug_log(log_buf);
+      // snprintf(log_buf, sizeof(log_buf),
+      //          "Failed to receive data. (returnval %d)", amount_received);
+      // instance->debug_log(instance->userdata, log_buf);
     }
 
     if (instance->clock_type == PTP_CLOCK_TYPE_MASTER &&
@@ -440,23 +492,34 @@ void ptp_thread_func(timesync_clock_t *instance) {
       memset(msg, 0, sizeof(ptp_message_announce_t));
       msg->header =
           ptp_message_create_header(instance, PTP_MESSAGE_TYPE_ANNOUNCE);
-      msg->current_utc_offset = instance->master.utc_offset;
+      msg->current_utc_offset = htobe16(instance->master.utc_offset);
       msg->grandmaster_priority_1 = instance->master.grandmaster_priority_1;
-      msg->grandmaster_clock_quality = instance->master.clock_quality;
+      msg->grandmaster_clock_quality.clock_accuracy =
+          instance->master.clock_quality.clock_accuracy;
+      msg->grandmaster_clock_quality.clock_class =
+          instance->master.clock_quality.clock_class;
+      msg->grandmaster_clock_quality.scaled_log_variance =
+          htobe16(instance->master.clock_quality.scaled_log_variance);
       msg->grandmaster_priority_2 = instance->master.grandmaster_priority_2;
       memcpy(msg->grandmaster_clock_identity,
              instance->master.grandmaster_clock_identity,
              sizeof(msg->grandmaster_clock_identity));
-      msg->steps_removed = instance->master.steps_removed;
+      msg->steps_removed = htons(instance->master.steps_removed);
       msg->time_source = instance->master.time_source;
-      msg->origin_timestamp = ns_to_ts(instance->get_time_ns());
+      msg->origin_timestamp =
+          ns_to_ts(instance->get_time_ns(instance->userdata));
 
-      int sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL,
-                                (uint8_t *)msg, sizeof(ptp_message_announce_t));
+      if (instance->debug_log) {
+        instance->debug_log(instance->userdata, "Sending ANNOUNCE message..");
+      }
+      int sent =
+          instance->send(instance->userdata, PTP_CONTROL_SEND_MULTICAST, NULL,
+                         (uint8_t *)msg, sizeof(ptp_message_announce_t));
 
       if (sent < sizeof(ptp_message_announce_t) && instance->debug_log) {
         snprintf(log_buf, sizeof(log_buf),
                  "Failed to send ANNOUNCE message. (retunval %d)", sent);
+        instance->debug_log(instance->userdata, log_buf);
       }
 
       announce_time = 0;
@@ -469,28 +532,31 @@ void ptp_thread_func(timesync_clock_t *instance) {
       ptp_message_sync_t *msg = (ptp_message_sync_t *)tx_buf;
       memset(msg, 0, sizeof(ptp_message_sync_t));
       msg->header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_SYNC);
+      // This would be one-step mode
       // msg->origin_timestamp = ns_to_ts(instance->get_time_ns());
 
-      int sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL,
-                                (uint8_t *)msg, sizeof(ptp_message_sync_t));
-      uint64_t sent_ts = instance->get_time_ns_tx();
+      int sent =
+          instance->send(instance->userdata, PTP_CONTROL_SEND_MULTICAST, NULL,
+                         (uint8_t *)msg, sizeof(ptp_message_sync_t));
+      uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
 
       if (sent < sizeof(ptp_message_sync_t) && instance->debug_log) {
         snprintf(log_buf, sizeof(log_buf),
                  "Failed to send SYNC message. (retunval %d)", sent);
-        instance->debug_log(log_buf);
+        instance->debug_log(instance->userdata, log_buf);
       } else {
         ptp_message_follow_up_t *fup = (ptp_message_follow_up_t *)tx_buf;
-        memset(msg, 0, sizeof(ptp_message_follow_up_t));
-        msg->header =
+        memset(fup, 0, sizeof(ptp_message_follow_up_t));
+        fup->header =
             ptp_message_create_header(instance, PTP_MESSAGE_TYPE_FOLLOW_UP);
-        msg->origin_timestamp = ns_to_ts(sent_ts);
-        sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL, (uint8_t *)fup,
-                              sizeof(ptp_message_follow_up_t));
+        fup->precise_origin_timestamp = ns_to_ts(sent_ts);
+        sent =
+            instance->send(instance->userdata, PTP_CONTROL_SEND_MULTICAST, NULL,
+                           (uint8_t *)fup, sizeof(ptp_message_follow_up_t));
         if (sent < sizeof(ptp_message_follow_up_t) && instance->debug_log) {
           snprintf(log_buf, sizeof(log_buf),
                    "Failed to send FOLLOW_UP message. (retunval %d)", sent);
-          instance->debug_log(log_buf);
+          instance->debug_log(instance->userdata, log_buf);
         }
       }
 

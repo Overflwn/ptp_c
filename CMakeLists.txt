@@ -31,6 +31,8 @@ if(WIN32)
   target_link_libraries(${PROJECT_NAME} PUBLIC wsock32 ws2_32)
 endif()
 
+target_link_libraries(${PROJECT_NAME} PRIVATE m)
+
 enable_testing()
 
 add_executable(

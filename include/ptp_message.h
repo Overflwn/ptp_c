@@ -184,7 +184,7 @@ typedef enum {
 typedef struct {
   uint8_t clock_class;
   uint8_t clock_accuracy;
-  int16_t scaled_log_variance;
+  uint16_t scaled_log_variance;
 } ptp_message_clock_quality_t;
 #pragma pack(pop)
 
