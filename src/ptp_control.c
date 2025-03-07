@@ -435,6 +435,7 @@ void ptp_thread_func(timesync_clock_t *instance) {
 
     if (instance->clock_type == PTP_CLOCK_TYPE_MASTER &&
         announce_time >= instance->master.announce_msg_interval_ms) {
+      instance->mutex_lock(instance->mutex);
       ptp_message_announce_t *msg = (ptp_message_announce_t *)tx_buf;
       memset(msg, 0, sizeof(ptp_message_announce_t));
       msg->header =
@@ -459,10 +460,12 @@ void ptp_thread_func(timesync_clock_t *instance) {
       }
 
       announce_time = 0;
+      instance->mutex_unlock(instance->mutex);
     }
 
     if (instance->clock_type == PTP_CLOCK_TYPE_MASTER &&
         sync_time >= instance->master.sync_msg_interval_ms) {
+      instance->mutex_lock(instance->mutex);
       ptp_message_sync_t *msg = (ptp_message_sync_t *)tx_buf;
       memset(msg, 0, sizeof(ptp_message_sync_t));
       msg->header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_SYNC);
@@ -492,6 +495,7 @@ void ptp_thread_func(timesync_clock_t *instance) {
       }
 
       sync_time = 0;
+      instance->mutex_unlock(instance->mutex);
     }
     instance->sleep_ms(1);
     announce_time++;
