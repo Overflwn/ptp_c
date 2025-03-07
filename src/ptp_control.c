@@ -106,23 +106,6 @@ static uint64_t ts_to_ns(const ptp_message_timestamp_t *ts) {
 
 void ptp_req_thread_func(timesync_clock_t *instance) {
   uint8_t tx_buf[2048];
-  // We shouldn't care about the transport protocol
-  // tx_buf[0] = 0x01;
-  // tx_buf[1] = 0x1B;
-  // tx_buf[2] = 0x19;
-  // tx_buf[3] = 0x00;
-  // tx_buf[4] = 0x00;
-  // tx_buf[5] = 0x00;
-  //
-  // tx_buf[6] = 0x01;
-  // tx_buf[7] = 0x02;
-  // tx_buf[8] = 0x03;
-  // tx_buf[9] = 0x04;
-  // tx_buf[10] = 0x05;
-  // tx_buf[11] = 0x06;
-
-  // tx_buf[12] = 0x88;
-  // tx_buf[13] = 0xF7;
   ptp_message_pdelay_req_t req = {{0}};
   req.header.message_type = PTP_MESSAGE_TYPE_PDELAY_REQ;
   req.header.major_sdo_id = instance->major_sdo_id;
