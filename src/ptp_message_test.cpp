@@ -183,6 +183,13 @@ TEST(PtpControl, ValidPDelayRequest) {
   clock.mutex_unlock = mut_unlock;
   clock.pdelay_req_interval_ms = 500;
   clock.use_p2p = true;
+  clock.source_port_identity.port_number = 0x1;
+  clock.source_port_identity.clock_identity[0] = 0x1;
+  clock.source_port_identity.clock_identity[1] = 0x2;
+  clock.source_port_identity.clock_identity[2] = 0x3;
+  clock.source_port_identity.clock_identity[3] = 0x4;
+  clock.source_port_identity.clock_identity[4] = 0x5;
+  clock.source_port_identity.clock_identity[5] = 0x6;
 
   std::thread t(ptp_req_thread_func, &clock);
   // Sleep less than the other thread is supposed to

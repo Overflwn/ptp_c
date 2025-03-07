@@ -117,6 +117,9 @@ typedef struct timesync_clock_s {
   ///        you might aswell return 0 in these cases
   get_time_ns_cb get_time_ns_tx;
 
+  /// @brief Callback to get the current time in nanoseconds
+  get_time_ns_cb get_time_ns;
+
   /// @brief Callback to set the new time
   set_time_ns_cb set_time_ns;
 
@@ -162,8 +165,13 @@ typedef struct timesync_clock_s {
   bool use_p2p;
 
   // Internal variables, just set these to 0
-  uint64_t current_delay_ns;
   uint64_t latest_t3;
+
+  struct {
+    uint64_t last_sync_ts;
+    uint64_t last_delay_ns;
+    int64_t last_offset_ns;
+  } statistics;
 } timesync_clock_t;
 
 /// @brief  This is the PDelay_REQ thread that cyclically sends out PDELAY_REQ
