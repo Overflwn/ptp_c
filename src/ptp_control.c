@@ -107,27 +107,7 @@ static uint64_t ts_to_ns(const ptp_message_timestamp_t *ts) {
 void ptp_req_thread_func(timesync_clock_t *instance) {
   uint8_t tx_buf[2048];
   ptp_message_pdelay_req_t req = {{0}};
-  req.header.message_type = PTP_MESSAGE_TYPE_PDELAY_REQ;
-  req.header.major_sdo_id = instance->major_sdo_id;
-  req.header.version = 2;
-  // TODO: After further testing, set this to 1. OR Make it adjustable for the
-  // user to allow for higher compatiblity with master clocks
-  req.header.minor_version = 0;
-  req.header.message_length = htobe16(sizeof(ptp_message_pdelay_req_t));
-  // TODO: Make domain number adjustable
-  req.header.domain_num = instance->domain_id;
-  // TODO: Make minor_sdo_id adjustable
-  req.header.minor_sdo_id = instance->minor_sdo_id;
-  req.header.flags.raw_val = 0;
-  req.header.flags.two_step = 1;
-  req.header.flags.utc_offset_valid = 1;
-  // TODO: Look into what the correction field does
-  // Update: seems to be related to transparent clocks (e.g. PTP-enabled
-  // switches), ignore in this case
-  req.header.correction_field = 0;
-  req.header.message_type_specific = 0;
-  // TODO: Make clock identity and port num adjustable
-  req.header.source_port_identity = instance->source_port_identity;
+  req.header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_REQ);
   uint16_t sequence_id = 0;
   req.header.sequence_id = htons(sequence_id);
   // 0x05 := "All others", see struct field comment
