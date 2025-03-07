@@ -37,12 +37,12 @@ typedef bool (*set_time_offset_ns_cb)(int64_t);
 /// @param[in] amount Time to sleep in milliseconds
 typedef void (*sleep_ms_func)(uint32_t);
 
-/// @brief Callback function to receive a new PTP frame. (**BLOCKING**)
+/// @brief Callback function to receive a new PTP frame. (**NON-BLOCKING**)
 /// @param[out] metadata Receive "metadata" that will get passed back to the
 /// send callback, e.g. sender IP + Port information, or nothing
 /// @param[in] buffer Buffer to write the received data into
 /// @param[in] buffer_size Buffersize
-/// @return Amount of bytes received
+/// @return Amount of bytes received, 0 for no data and <0 for error
 typedef int (*receive_func)(void **, uint8_t *, size_t);
 
 /// @brief Callback function to send a new PTP frame.
@@ -91,6 +91,11 @@ typedef struct ptp_delay_info_entry_s {
   struct ptp_delay_info_entry_s *previous;
   struct ptp_delay_info_entry_s *next;
 } ptp_delay_info_entry_t;
+
+typedef enum {
+  PTP_CLOCK_TYPE_SLAVE,
+  PTP_CLOCK_TYPE_MASTER,
+} ptp_clock_type_t;
 
 /// @brief  Main PTP instance struct. Create the instance yourself and fill it
 ///         with the necessary callbacks and mutex.
@@ -160,6 +165,22 @@ typedef struct timesync_clock_s {
   uint8_t minor_sdo_id : 4;
 
   ptp_message_port_identity_t source_port_identity;
+
+  /// @brief Infos used for the announce messages
+  struct {
+    uint32_t announce_msg_interval_ms;
+    uint32_t sync_msg_interval_ms;
+    uint16_t utc_offset;
+    uint8_t grandmaster_priority_1;
+    ptp_message_clock_quality_t clock_quality;
+    uint8_t grandmaster_priority_2;
+    uint8_t grandmaster_clock_identity[8];
+    uint16_t steps_removed;
+    uint8_t time_source;
+  } master;
+
+  /// @brief Whether this clock is acting as a master or slave
+  ptp_clock_type_t clock_type;
 
   /// @brief Whether to use P2P for delay calculation instead of E2E
   bool use_p2p;

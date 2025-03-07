@@ -104,6 +104,20 @@ static uint64_t ts_to_ns(const ptp_message_timestamp_t *ts) {
   return temp;
 }
 
+/// @brief Helper function to convert a 64bit unsigned int to
+/// ptp_message_timestamp_t
+/// TODO: Move this function (and probably others aswell) to a utils file
+/// @param[in] ts The timestamp to convert
+/// @return The converted timestamp or 0 on error
+static ptp_message_timestamp_t ns_to_ts(uint64_t ts) {
+  uint64_t temp = htobe64(ts);
+  ptp_message_timestamp_t result = {0};
+  uint64_t temp_secs_be = 0;
+  memcpy(result.seconds, &((uint8_t *)(&temp))[2], sizeof(result.seconds));
+  result.nanoseconds = htobe32(temp % 1000000000);
+  return result;
+}
+
 void ptp_req_thread_func(timesync_clock_t *instance) {
   uint8_t tx_buf[2048];
   ptp_message_pdelay_req_t req = {{0}};
@@ -198,6 +212,8 @@ void ptp_thread_func(timesync_clock_t *instance) {
   // srcPort, dstIp, dstPort)
   // We don't do anything with it, we just give it back when sending
   void *recv_metadata = NULL;
+  uint32_t announce_time = 0;
+  uint32_t sync_time = 0;
   while (!instance->stop) {
     int amount_received =
         instance->receive(&recv_metadata, rx_buf, sizeof(rx_buf));
@@ -209,6 +225,12 @@ void ptp_thread_func(timesync_clock_t *instance) {
       case PTP_MESSAGE_TYPE_SYNC: {
         if (instance->debug_log) {
           instance->debug_log("Received SYNC message");
+        }
+        if (instance->clock_type == PTP_CLOCK_TYPE_MASTER) {
+          if (instance->debug_log) {
+            instance->debug_log("We're set as master, ignoring SYNC...");
+          }
+          break;
         }
         ptp_message_sync_t *msg = (ptp_message_sync_t *)rx_buf;
         ptp_delay_info_entry_t *delay_info = get_or_new_delay_info(
@@ -241,6 +263,12 @@ void ptp_thread_func(timesync_clock_t *instance) {
       case PTP_MESSAGE_TYPE_FOLLOW_UP: {
         if (instance->debug_log) {
           instance->debug_log("Received FOLLOW_UP message");
+        }
+        if (instance->clock_type == PTP_CLOCK_TYPE_MASTER) {
+          if (instance->debug_log) {
+            instance->debug_log("We're set as master, ignoring SYNC...");
+          }
+          break;
         }
         ptp_message_follow_up_t *msg = (ptp_message_follow_up_t *)rx_buf;
         uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
@@ -404,6 +432,70 @@ void ptp_thread_func(timesync_clock_t *instance) {
                "Failed to receive data. (returnval %d)", amount_received);
       instance->debug_log(log_buf);
     }
+
+    if (instance->clock_type == PTP_CLOCK_TYPE_MASTER &&
+        announce_time >= instance->master.announce_msg_interval_ms) {
+      ptp_message_announce_t *msg = (ptp_message_announce_t *)tx_buf;
+      memset(msg, 0, sizeof(ptp_message_announce_t));
+      msg->header =
+          ptp_message_create_header(instance, PTP_MESSAGE_TYPE_ANNOUNCE);
+      msg->current_utc_offset = instance->master.utc_offset;
+      msg->grandmaster_priority_1 = instance->master.grandmaster_priority_1;
+      msg->grandmaster_clock_quality = instance->master.clock_quality;
+      msg->grandmaster_priority_2 = instance->master.grandmaster_priority_2;
+      memcpy(msg->grandmaster_clock_identity,
+             instance->master.grandmaster_clock_identity,
+             sizeof(msg->grandmaster_clock_identity));
+      msg->steps_removed = instance->master.steps_removed;
+      msg->time_source = instance->master.time_source;
+      msg->origin_timestamp = ns_to_ts(instance->get_time_ns());
+
+      int sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL,
+                                (uint8_t *)msg, sizeof(ptp_message_announce_t));
+
+      if (sent < sizeof(ptp_message_announce_t) && instance->debug_log) {
+        snprintf(log_buf, sizeof(log_buf),
+                 "Failed to send ANNOUNCE message. (retunval %d)", sent);
+      }
+
+      announce_time = 0;
+    }
+
+    if (instance->clock_type == PTP_CLOCK_TYPE_MASTER &&
+        sync_time >= instance->master.sync_msg_interval_ms) {
+      ptp_message_sync_t *msg = (ptp_message_sync_t *)tx_buf;
+      memset(msg, 0, sizeof(ptp_message_sync_t));
+      msg->header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_SYNC);
+      // msg->origin_timestamp = ns_to_ts(instance->get_time_ns());
+
+      int sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL,
+                                (uint8_t *)msg, sizeof(ptp_message_sync_t));
+      uint64_t sent_ts = instance->get_time_ns_tx();
+
+      if (sent < sizeof(ptp_message_sync_t) && instance->debug_log) {
+        snprintf(log_buf, sizeof(log_buf),
+                 "Failed to send SYNC message. (retunval %d)", sent);
+        instance->debug_log(log_buf);
+      } else {
+        ptp_message_follow_up_t *fup = (ptp_message_follow_up_t *)tx_buf;
+        memset(msg, 0, sizeof(ptp_message_follow_up_t));
+        msg->header =
+            ptp_message_create_header(instance, PTP_MESSAGE_TYPE_FOLLOW_UP);
+        msg->origin_timestamp = ns_to_ts(sent_ts);
+        sent = instance->send(PTP_CONTROL_SEND_MULTICAST, NULL, (uint8_t *)fup,
+                              sizeof(ptp_message_follow_up_t));
+        if (sent < sizeof(ptp_message_follow_up_t) && instance->debug_log) {
+          snprintf(log_buf, sizeof(log_buf),
+                   "Failed to send FOLLOW_UP message. (retunval %d)", sent);
+          instance->debug_log(log_buf);
+        }
+      }
+
+      sync_time = 0;
+    }
+    instance->sleep_ms(1);
+    announce_time++;
+    sync_time++;
   }
 }
 
