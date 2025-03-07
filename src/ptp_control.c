@@ -144,13 +144,7 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   req.header.correction_field = 0;
   req.header.message_type_specific = 0;
   // TODO: Make clock identity and port num adjustable
-  req.header.source_port_identity.port_number = 0x0001;
-  req.header.source_port_identity.clock_identity[0] = 0x01;
-  req.header.source_port_identity.clock_identity[1] = 0x02;
-  req.header.source_port_identity.clock_identity[2] = 0x03;
-  req.header.source_port_identity.clock_identity[3] = 0x04;
-  req.header.source_port_identity.clock_identity[4] = 0x05;
-  req.header.source_port_identity.clock_identity[5] = 0x06;
+  req.header.source_port_identity = instance->source_port_identity;
   uint16_t sequence_id = 0;
   req.header.sequence_id = htons(sequence_id);
   // 0x05 := "All others", see struct field comment
