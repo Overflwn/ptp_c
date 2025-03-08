@@ -169,6 +169,10 @@ static void calculate_new_time(timesync_clock_t *instance,
         instance->get_time_ns(instance->userdata);
     instance->statistics.last_delay_ns =
         delay_info->delay_info.last_calculated_delay;
+    if (instance->debug_log) {
+      snprintf(log_buf, sizeof(log_buf), "New offset: %"PRId64" (t1 := %"PRIu64", t2 := %"PRIu64")", offset, delay_info->delay_info.t1, delay_info->delay_info.t2);
+      instance->debug_log(instance->userdata, log_buf);
+    }
   } else if (instance->debug_log) {
     // TODO: Notify user?
     instance->debug_log(
@@ -176,7 +180,8 @@ static void calculate_new_time(timesync_clock_t *instance,
         "No delay has been calculated yet, ignoring new time..");
   }
 
-  if (!instance->use_p2p) {
+  // Don't send a DELAY_REQ if we're using P2P *or* if no tx_buf is given (-> only recalculate offset)
+  if (!instance->use_p2p && tx_buf) {
     if (instance->debug_log) {
       instance->debug_log(
           instance->userdata,
@@ -200,7 +205,8 @@ static void calculate_new_time(timesync_clock_t *instance,
       instance->debug_log(instance->userdata, log_buf);
     } else {
       if (instance->debug_log) {
-        instance->debug_log(instance->userdata, "DELAY_REQ sent.");
+        snprintf(log_buf, sizeof(log_buf), "DELAY_REQ sent. (t3 = %"PRIu64")", sent_ts);
+        instance->debug_log(instance->userdata, log_buf);
       }
       delay_info->delay_info.t3 = sent_ts;
       delay_info->delay_info.sequence_id_delay_req++;
@@ -247,6 +253,10 @@ void ptp_thread_func(timesync_clock_t *instance) {
               instance, port_identity_to_id(&msg->header.source_port_identity));
           if (delay_info != NULL) {
             delay_info->delay_info.t2 = received_ts;
+            if (instance->debug_log) {
+              snprintf(log_buf, sizeof(log_buf), "Received t2: %"PRIu64, received_ts);
+              instance->debug_log(instance->userdata, log_buf);
+            }
             if (!msg->header.flags.two_step) {
               if (instance->debug_log) {
                 instance->debug_log(instance->userdata,
@@ -345,6 +355,9 @@ void ptp_thread_func(timesync_clock_t *instance) {
               }
               delay_info->delay_info.last_calculated_delay =
                   (uint64_t)(((t2 - t1) + (t4 - t3)) / 2);
+              // Trigger re-calculation of offset
+              // Don't pass tx_buf as we don't want to send DELAY_REQ yet again
+              calculate_new_time(instance, delay_info, recv_metadata, NULL);
             } else if (instance->debug_log) {
               snprintf(
                   log_buf, sizeof(log_buf),
@@ -458,6 +471,9 @@ void ptp_thread_func(timesync_clock_t *instance) {
             if (t3 != 0 && t4 != 0 && t5 != 0 && t6 != 0) {
               uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
               delay_info->delay_info.last_calculated_delay = delay;
+              // Trigger re-calculation of offset
+              // Don't pass tx_buf as we don't want to send DELAY_REQ yet again
+              calculate_new_time(instance, delay_info, recv_metadata, NULL);
             } else if (instance->debug_log) {
               // TODO: Handle weird state
               snprintf(log_buf, sizeof(log_buf),
@@ -476,8 +492,6 @@ void ptp_thread_func(timesync_clock_t *instance) {
         }
         }
         instance->mutex_unlock(instance->mutex);
-      } else {
-        int x = 5;
       }
     } else if (amount_received < 0 && instance->debug_log) {
       // snprintf(log_buf, sizeof(log_buf),
