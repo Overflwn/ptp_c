@@ -14,6 +14,14 @@ Currently this includes the following functions:
 
 ## NOTE
 
-Currently this library only supports acting as an ordinary clock. Acting as a grandmaster clock is planned (although probably without utilizing the best master clock algorithm). 
+Currently this library only supports fixed master or slave modes, so BMCA is not supported.
 
+Both P2P and E2E delay calculation is supported. Although for the master you might aswell turn it off as the delay info is not relevant for the master.
 
+## TODOs
+
+- [ ] Add additional parameter to the send (+ receive?) function callback to differentiate between PTP General messages and PTP Event messages (-> different UDP ports)
+- [ ] Extend Integration Tests
+- [ ] Provide user example software running either a master or slave clock via UDP
+- [ ] Clean up code, add more documentation
+- [ ] Create doxygen HTML documentation
