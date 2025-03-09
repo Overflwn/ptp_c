@@ -383,13 +383,14 @@ void ptp_thread_func(timesync_clock_t *instance) {
           // Get the remaining ns
           received_ts = received_ts % 1000000000;
           ptp_message_pdelay_resp_t *resp = (ptp_message_pdelay_resp_t *)tx_buf;
+          memset(resp, 0, sizeof(ptp_message_pdelay_resp_t));
           resp->header =
               ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_RESP);
           resp->header.sequence_id = msg->header.sequence_id;
           resp->requesting_port_identity = msg->header.source_port_identity;
           resp->request_receipt_timestamp.nanoseconds =
               htobe32((uint32_t)received_ts);
-          memcpy(resp->request_receipt_timestamp.seconds, &((uint8_t *)secs)[2],
+          memcpy((uint8_t*)resp->request_receipt_timestamp.seconds, &((uint8_t *)&secs)[2],
                  6);
 
           int sent = instance->send(
@@ -414,7 +415,7 @@ void ptp_thread_func(timesync_clock_t *instance) {
             uint32_t sent_ns = htobe32(sent_ts % 1000000000);
             fup->response_origin_timestamp.nanoseconds = sent_ns;
             memcpy(fup->response_origin_timestamp.seconds,
-                   &((uint8_t *)secs)[2], 6);
+                   &((uint8_t *)&secs)[2], 6);
 
             sent = instance->send(instance->userdata, PTP_CONTROL_SEND_UNICAST,
                                   recv_metadata, (uint8_t *)fup,
