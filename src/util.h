@@ -17,7 +17,7 @@ extern "C" {
 #define be64toh(x) ntohll(x)
 #define be32toh(x) ntohl(x)
 #define be16toh(x) ntohs(x)
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(ESP_PLATFORM)
 // NOTE: My guess is that most microcontroller SDKs have some sort of support
 // for these headers aswell
 // TODO: Try compiling this for ESP
@@ -32,6 +32,8 @@ extern "C" {
 #define be64toh(x) ntohll(x)
 #define be32toh(x) ntohl(x)
 #define be16toh(x) ntohs(x)
+#else
+#error "Unknown platform - Cannot include network-related header files"
 #endif
 
 ptp_message_header_t ptp_message_create_header(timesync_clock_t *instance,
