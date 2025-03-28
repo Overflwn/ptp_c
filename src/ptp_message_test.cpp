@@ -61,7 +61,7 @@ void sleep_ms(uint32_t ms) {
 int receive(void *userdata, void **metadata, uint8_t *buf, size_t buf_size) {
   return 0;
 }
-int send(void *userdata, ptp_control_send_type_t send_type, void *metadata,
+int send(void *userdata, ptp_control_send_flags_t send_type, void *metadata,
          uint8_t *buf, size_t amount) {
   if (send_buf) {
     free(send_buf);

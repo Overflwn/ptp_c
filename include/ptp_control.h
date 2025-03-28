@@ -14,10 +14,13 @@ extern "C" {
 
 typedef enum {
   /// @brief Whether the message to send is supposed to be sent multicast
-  PTP_CONTROL_SEND_MULTICAST,
+  PTP_CONTROL_SEND_MULTICAST = 0x00,
   /// @brief Whether the message to send is supposed to be sent unicast
-  PTP_CONTROL_SEND_UNICAST,
-} ptp_control_send_type_t;
+  PTP_CONTROL_SEND_UNICAST = 0x01,
+  /// @brief Whether the message to send is a PTP event or general message
+  PTP_CONTROL_SEND_EVENT = 0x10,
+  PTP_CONTROL_SEND_GENERAL = 0x20,
+} ptp_control_send_flags_t;
 
 /// @brief Callback function to retrieve a nanosecond timestamp.
 /// @return Timestamp in nanoseconds
@@ -54,7 +57,7 @@ typedef int (*receive_func)(void *, void **, uint8_t *, size_t);
 /// @param[in] buffer Buffer to send
 /// @param[in] amount Amount of bytes to send
 /// @return Amount of bytes sent
-typedef int (*send_func)(void *, ptp_control_send_type_t, void *, uint8_t *,
+typedef int (*send_func)(void *, ptp_control_send_flags_t, void *, uint8_t *,
                          size_t);
 
 /// @brief Some kind of mutex type
