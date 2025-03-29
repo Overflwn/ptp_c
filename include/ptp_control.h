@@ -20,25 +20,25 @@ typedef enum {
   /// @brief Whether the message to send is a PTP event or general message
   PTP_CONTROL_SEND_EVENT = 0x10,
   PTP_CONTROL_SEND_GENERAL = 0x20,
-} ptp_control_send_flags_t;
+} ptp_send_flags_t;
 
 /// @brief Callback function to retrieve a nanosecond timestamp.
 /// @return Timestamp in nanoseconds
-typedef uint64_t (*get_time_ns_cb)(void *);
+typedef uint64_t (*ptp_get_time_ns_cb)(void *);
 
 /// @brief Callback function to set the time (nanosecond time).
 /// @param[in] timestamp Timestamp as uint64_t
 /// @return True on success
-typedef bool (*set_time_ns_cb)(void *, uint64_t);
+typedef bool (*ptp_set_time_ns_cb)(void *, uint64_t);
 
 /// @brief Callback function to offset the time (nanosecond offset).
 /// @param[in] offset Nanosecond offset as uint64_t
 /// @return True on success
-typedef bool (*set_time_offset_ns_cb)(void *, int64_t);
+typedef bool (*ptp_set_time_offset_ns_cb)(void *, int64_t);
 
 /// @brief Callback function to let the calling thread sleep
 /// @param[in] amount Time to sleep in milliseconds
-typedef void (*sleep_ms_func)(uint32_t);
+typedef void (*ptp_sleep_ms_func)(uint32_t);
 
 /// @brief Callback function to receive a new PTP frame. (**NON-BLOCKING**)
 /// @param[out] metadata Receive "metadata" that will get passed back to the
@@ -46,7 +46,7 @@ typedef void (*sleep_ms_func)(uint32_t);
 /// @param[in] buffer Buffer to write the received data into
 /// @param[in] buffer_size Buffersize
 /// @return Amount of bytes received, 0 for no data and <0 for error
-typedef int (*receive_func)(void *, void **, uint8_t *, size_t);
+typedef int (*ptp_receive_func)(void *, void **, uint8_t *, size_t);
 
 /// @brief Callback function to send a new PTP frame.
 /// @param[in] target_type Whether to send the PTP frame back to the sender (:=
@@ -57,7 +57,7 @@ typedef int (*receive_func)(void *, void **, uint8_t *, size_t);
 /// @param[in] buffer Buffer to send
 /// @param[in] amount Amount of bytes to send
 /// @return Amount of bytes sent
-typedef int (*send_func)(void *, ptp_control_send_flags_t, void *, uint8_t *,
+typedef int (*ptp_send_func)(void *, ptp_send_flags_t, void *, uint8_t *,
                          size_t);
 
 /// @brief Some kind of mutex type
@@ -73,7 +73,7 @@ typedef void (*ptp_mutex_unlock_func)(ptp_mutex_type_t);
 
 /// @brief Optional callback function to print debug logs
 /// @param[in] text Text to log
-typedef void (*debug_log_func)(void *, const char *);
+typedef void (*ptp_debug_log_func)(void *, const char *);
 
 typedef struct ptp_delay_info_s {
   uint64_t peer_id;
@@ -103,7 +103,7 @@ typedef enum {
 
 /// @brief  Main PTP instance struct. Create the instance yourself and fill it
 ///         with the necessary callbacks and mutex.
-typedef struct timesync_clock_s {
+typedef struct ptp_clock_s {
   /// @brief Callback to get the current time (after receiving a PTP frame)
   ///
   ///        NOTE: You might aswell pass a function that returns the timestamp
@@ -113,7 +113,7 @@ typedef struct timesync_clock_s {
   ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
   ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
   ///        you might aswell return 0 in these cases
-  get_time_ns_cb get_time_ns_rx;
+  ptp_get_time_ns_cb get_time_ns_rx;
 
   /// @brief Callback to get the current time (after sending a PTP frame)
   ///
@@ -124,29 +124,29 @@ typedef struct timesync_clock_s {
   ///        NOTE: For non-event PTP messages (i.e. FOLLOW_UP,
   ///        PDELAY_RESP_FOLLOW_UP, ...) The timestamp is not actually needed,
   ///        you might aswell return 0 in these cases
-  get_time_ns_cb get_time_ns_tx;
+  ptp_get_time_ns_cb get_time_ns_tx;
 
   /// @brief Callback to get the current time in nanoseconds
-  get_time_ns_cb get_time_ns;
+  ptp_get_time_ns_cb get_time_ns;
 
   /// @brief Callback to set the new time
-  set_time_ns_cb set_time_ns;
+  ptp_set_time_ns_cb set_time_ns;
 
   /// @brief Callback to offset the time
-  set_time_offset_ns_cb set_time_offset_ns;
+  ptp_set_time_offset_ns_cb set_time_offset_ns;
 
   /// @brief Some kind of sleep function (expects sleep in ms)
-  sleep_ms_func sleep_ms;
+  ptp_sleep_ms_func sleep_ms;
 
   /// @brief  Some kind of receive function that returns a full PTP frame
   ///         (BLOCKING)
-  receive_func receive;
+  ptp_receive_func receive;
 
   /// @brief Some kind of send function that sends a PTP frame
-  send_func send;
+  ptp_send_func send;
 
   /// @brief [Optional] A function used for logging
-  debug_log_func debug_log;
+  ptp_debug_log_func debug_log;
 
   /// @brief Flag to stop the thread
   bool stop;
@@ -200,7 +200,7 @@ typedef struct timesync_clock_s {
     uint64_t last_delay_ns;
     int64_t last_offset_ns;
   } statistics;
-} timesync_clock_t;
+} ptp_clock_t;
 
 /// @brief  This is the PDelay_REQ thread that cyclically sends out PDELAY_REQ
 ///         messages
@@ -208,7 +208,7 @@ typedef struct timesync_clock_s {
 ///         Run this as a thread function and pass your instance as the thread
 ///         data
 /// @param[in] instance The PTP instance
-void ptp_req_thread_func(timesync_clock_t *instance);
+void ptp_pdelay_req_thread_func(ptp_clock_t *instance);
 
 /// @brief  This a thread function that cyclically receives data and parses PTP
 ///         messages in order to handle them.
@@ -216,7 +216,7 @@ void ptp_req_thread_func(timesync_clock_t *instance);
 ///         Run this as a thread function and pass your instance as the thread
 ///         data
 /// @param[in] instance The PTP instance
-void ptp_thread_func(timesync_clock_t *instance);
+void ptp_thread_func(ptp_clock_t *instance);
 
 // bool ptp_handle_message(timesync_clock_t *instance, uint8_t *rx_buf,
 //                         size_t len);

@@ -6,7 +6,7 @@ extern "C" {
 #include <math.h>
 
 ptp_message_header_t
-ptp_message_create_header(timesync_clock_t *instance,
+ptp_message_create_header(ptp_clock_t *instance,
                           ptp_message_type_t message_type) {
   ptp_message_header_t header = {
       .message_type = message_type,
