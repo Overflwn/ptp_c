@@ -164,6 +164,8 @@ static void calculate_new_time(ptp_clock_t *instance,
     int64_t offset = ((int64_t)delay_info->delay_info.t2 -
                       (int64_t)delay_info->delay_info.t1) -
                      (int64_t)delay_info->delay_info.last_calculated_delay;
+    // Adjust for a little bit of runtime overhead up to this point
+    offset += (int64_t)(instance->get_time_ns(instance->userdata) - instance->fup_received);
     // TODO: Check returnval
     instance->set_time_offset_ns(instance->userdata, offset);
     if (instance->use_p2p)
@@ -327,6 +329,7 @@ void ptp_thread_func(ptp_clock_t *instance) {
           break;
         }
         case PTP_MESSAGE_TYPE_FOLLOW_UP: {
+          instance->fup_received = received_ts;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata,
                                 "Received FOLLOW_UP message");

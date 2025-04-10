@@ -194,6 +194,7 @@ typedef struct ptp_clock_s {
 
   // Internal variables, just set these to 0
   uint64_t latest_t3;
+  uint64_t fup_received;
 
   struct {
     uint64_t last_sync_ts;
