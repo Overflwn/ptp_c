@@ -166,6 +166,17 @@ static void calculate_new_time(ptp_clock_t *instance,
                      (int64_t)delay_info->delay_info.last_calculated_delay;
     // TODO: Check returnval
     instance->set_time_offset_ns(instance->userdata, offset);
+    if (instance->use_p2p)
+    {
+      // Reset all timestamps so that we don't calculate false delays by accident when having bad timing (e.g. PDelayReq -> Sync+FUP -> New offset -> PDelayResp)
+      delay_info->delay_info.t1 = 0;
+      delay_info->delay_info.t2 = 0;
+      delay_info->delay_info.t3 = 0;
+      delay_info->delay_info.t4 = 0;
+      delay_info->delay_info.t5 = 0;
+      delay_info->delay_info.t6 = 0;
+      instance->latest_t3 = 0;
+    }
     instance->statistics.last_offset_ns = offset;
     instance->statistics.last_sync_ts =
         instance->get_time_ns(instance->userdata);
@@ -177,12 +188,22 @@ static void calculate_new_time(ptp_clock_t *instance,
                offset, delay_info->delay_info.t1, delay_info->delay_info.t2);
       instance->debug_log(instance->userdata, log_buf);
     }
-  } else if (instance->debug_log) {
+  } else {
+    if (instance->use_p2p)
+    {
+      // Reset T1 and T2 so that we don't block PDelay by accident
+      // calculate_new_time only gets called after FUP (in P2P mode) so this should be fine
+      delay_info->delay_info.t1 = 0;
+      delay_info->delay_info.t2 = 0;
+      instance->latest_t3 = 0;
+    }
     // TODO: Notify user?
-    snprintf(log_buf, sizeof(log_buf), "No offset or delay info has been calculated yet, ignoring new time.. (t1: %lu, t2: %lu)", delay_info->delay_info.t1, delay_info->delay_info.t2);
-    instance->debug_log(
-        instance->userdata,
-        log_buf);
+    if (instance->debug_log) {
+      snprintf(log_buf, sizeof(log_buf), "No offset or delay info has been calculated yet, ignoring new time.. (t1: %lu, t2: %lu)", delay_info->delay_info.t1, delay_info->delay_info.t2);
+      instance->debug_log(
+          instance->userdata,
+          log_buf);
+    }
   }
 
   // Don't send a DELAY_REQ if we're using P2P *or* if no tx_buf is given (->
@@ -454,6 +475,12 @@ void ptp_thread_func(ptp_clock_t *instance) {
               get_or_new_delay_info(instance, id);
           if (delay_info != NULL) {
             // TODO: Check sequence_id to be safe
+            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0)
+            {
+              // We at least got a SYNC message and still haven't recalculated the offset (see calculate_new_offset function)
+              // but already initiated pdelay -> Ignore this PDelay iteration
+              break;
+            }
             uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
             delay_info->delay_info.t3 = instance->latest_t3;
             delay_info->delay_info.t4 = ts;
@@ -475,6 +502,12 @@ void ptp_thread_func(ptp_clock_t *instance) {
           uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
           ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
           if (delay_info != NULL) {
+            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0)
+            {
+              // We at least got a SYNC message and still haven't recalculated the offset (see calculate_new_offset function)
+              // but already initiated pdelay -> Ignore this PDelay iteration
+              break;
+            }
             uint64_t ts = ts_to_ns(&msg->response_origin_timestamp);
             delay_info->delay_info.t5 = ts;
             uint64_t t3 = delay_info->delay_info.t3;
