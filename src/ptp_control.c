@@ -641,6 +641,9 @@ void ptp_thread_func(ptp_clock_t *instance) {
       sync_time = 0;
       instance->mutex_unlock(instance->mutex);
     }
+    // NOTE: This "counter" expects the sleep function to be exact and that the above receiving part does not introduce any runtime overhead (-> drifting),
+    // which is not the reality.
+    // TODO: Move SYNC+FUP & ANNOUNCE to a third thread function to be more accurate
     instance->sleep_ms(1);
     announce_time++;
     sync_time++;
