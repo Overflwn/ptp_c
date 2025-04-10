@@ -152,7 +152,7 @@ typedef struct ptp_clock_s {
   bool stop;
 
   /// @brief Pass your mutex handle and mutex functions here
-  ptp_mutex_type_t *mutex;
+  ptp_mutex_type_t mutex;
   ptp_mutex_lock_func mutex_lock;
   ptp_mutex_unlock_func mutex_unlock;
 

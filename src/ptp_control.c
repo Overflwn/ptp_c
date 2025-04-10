@@ -158,7 +158,7 @@ static void calculate_new_time(ptp_clock_t *instance,
                                ptp_delay_info_entry_t *delay_info,
                                void *recv_metadata, uint8_t *tx_buf) {
   char log_buf[512];
-  if (delay_info->delay_info.last_calculated_delay > 0) {
+  if (delay_info->delay_info.last_calculated_delay > 0 && delay_info->delay_info.t1 != 0 && delay_info->delay_info.t2 != 0) {
     // TODO: int64 theoretically reduces the possible
     //       time range, what do?
     int64_t offset = ((int64_t)delay_info->delay_info.t2 -
@@ -179,9 +179,10 @@ static void calculate_new_time(ptp_clock_t *instance,
     }
   } else if (instance->debug_log) {
     // TODO: Notify user?
+    snprintf(log_buf, sizeof(log_buf), "No offset or delay info has been calculated yet, ignoring new time.. (t1: %lu, t2: %lu)", delay_info->delay_info.t1, delay_info->delay_info.t2);
     instance->debug_log(
         instance->userdata,
-        "No delay has been calculated yet, ignoring new time..");
+        log_buf);
   }
 
   // Don't send a DELAY_REQ if we're using P2P *or* if no tx_buf is given (->
@@ -483,9 +484,15 @@ void ptp_thread_func(ptp_clock_t *instance) {
             if (t3 != 0 && t4 != 0 && t5 != 0 && t6 != 0) {
               uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
               delay_info->delay_info.last_calculated_delay = delay;
+              if (instance->debug_log)
+              {
+                snprintf(log_buf, sizeof(log_buf), "New PDelay: %lu", delay);
+                instance->debug_log(instance->userdata, log_buf);
+              }
               // Trigger re-calculation of offset
               // Don't pass tx_buf as we don't want to send DELAY_REQ yet again
-              calculate_new_time(instance, delay_info, recv_metadata, NULL);
+              // TODO: *Don't* Recalculate time after PDelay RespFUP -> Needs testing
+              // calculate_new_time(instance, delay_info, recv_metadata, NULL);
             } else if (instance->debug_log) {
               // TODO: Handle weird state
               snprintf(log_buf, sizeof(log_buf),
@@ -562,6 +569,9 @@ void ptp_thread_func(ptp_clock_t *instance) {
       // This would be one-step mode
       // msg->origin_timestamp = ns_to_ts(instance->get_time_ns());
 
+      if (instance->debug_log) {
+        instance->debug_log(instance->userdata, "Sending SYNC message..");
+      }
       int sent =
           instance->send(instance->userdata,
                          PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_EVENT,
@@ -578,6 +588,9 @@ void ptp_thread_func(ptp_clock_t *instance) {
         fup->header =
             ptp_message_create_header(instance, PTP_MESSAGE_TYPE_FOLLOW_UP);
         fup->precise_origin_timestamp = ns_to_ts(sent_ts);
+        if (instance->debug_log) {
+          instance->debug_log(instance->userdata, "Sending FOLLOW_UP message..");
+        }
         sent = instance->send(
             instance->userdata,
             PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_GENERAL, NULL,
