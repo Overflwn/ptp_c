@@ -120,7 +120,7 @@ static ptp_message_timestamp_t ns_to_ts(uint64_t ts) {
 }
 
 void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
-  uint8_t tx_buf[2048];
+  uint8_t tx_buf[sizeof(ptp_message_pdelay_req_t)];
   ptp_message_pdelay_req_t req = {{0}};
   req.header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_REQ);
   uint16_t sequence_id = 0;
@@ -221,8 +221,8 @@ static void calculate_new_time(ptp_clock_t *instance,
 }
 
 void ptp_thread_func(ptp_clock_t *instance) {
-  uint8_t rx_buf[2048];
-  uint8_t tx_buf[2048];
+  uint8_t rx_buf[512];
+  uint8_t tx_buf[512];
   char log_buf[512];
   // We get this from the user-defined receive function
   // It might be for example metadata about the sender and receiver (i.e. srcIp,
