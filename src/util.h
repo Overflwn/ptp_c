@@ -36,7 +36,7 @@ extern "C" {
 #error "Unknown platform - Cannot include network-related header files"
 #endif
 
-ptp_message_header_t ptp_message_create_header(timesync_clock_t *instance,
+ptp_message_header_t ptp_message_create_header(ptp_clock_t *instance,
                                                ptp_message_type_t message_type);
 
 #ifdef __cplusplus__

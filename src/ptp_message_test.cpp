@@ -61,7 +61,7 @@ void sleep_ms(uint32_t ms) {
 int receive(void *userdata, void **metadata, uint8_t *buf, size_t buf_size) {
   return 0;
 }
-int send(void *userdata, ptp_control_send_flags_t send_type, void *metadata,
+int send(void *userdata, ptp_send_flags_t send_type, void *metadata,
          uint8_t *buf, size_t amount) {
   if (send_buf) {
     free(send_buf);
@@ -92,7 +92,7 @@ TEST(PtpMessageTest, BasicAssertions) {
 TEST(PtpControl, ControlSetup) {
   // Test whether the library correctly sets itself up and utilizes the given
   // callbacks
-  timesync_clock_t clock = {0};
+  ptp_clock_t clock = {0};
   clock.domain_id = 1;
   clock.get_time_ns_rx = get_time_ns;
   clock.get_time_ns_tx = get_time_ns;
@@ -107,7 +107,7 @@ TEST(PtpControl, ControlSetup) {
   clock.pdelay_req_interval_ms = 500;
   clock.use_p2p = true;
 
-  std::thread t(ptp_req_thread_func, &clock);
+  std::thread t(ptp_pdelay_req_thread_func, &clock);
   // Sleep less than the other thread is supposed to
   // -> thread should've sent only once (and sent only once)
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
@@ -134,7 +134,7 @@ TEST(PtpControl, ControlSetup) {
 TEST(PtpControl, P2pDisabled) {
   // Test whether the library correctly sets itself up and utilizes the given
   // callbacks
-  timesync_clock_t clock = {0};
+  ptp_clock_t clock = {0};
   clock.domain_id = 1;
   clock.get_time_ns_rx = get_time_ns;
   clock.get_time_ns_tx = get_time_ns;
@@ -149,7 +149,7 @@ TEST(PtpControl, P2pDisabled) {
   clock.pdelay_req_interval_ms = 500;
   clock.use_p2p = false;
 
-  std::thread t(ptp_req_thread_func, &clock);
+  std::thread t(ptp_pdelay_req_thread_func, &clock);
   // Sleep less than the other thread is supposed to
   // -> thread should've sent only once (and sent only once)
   std::this_thread::sleep_for(std::chrono::milliseconds(300));
@@ -173,7 +173,7 @@ TEST(PtpControl, ValidPDelayRequest) {
       0x03, 0x04, 0x05, 0x06, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x05,
       0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  timesync_clock_t clock = {0};
+  ptp_clock_t clock = {0};
   clock.domain_id = 1;
   clock.get_time_ns_rx = get_time_ns;
   clock.get_time_ns_tx = get_time_ns;
@@ -195,7 +195,7 @@ TEST(PtpControl, ValidPDelayRequest) {
   clock.source_port_identity.clock_identity[4] = 0x5;
   clock.source_port_identity.clock_identity[5] = 0x6;
 
-  std::thread t(ptp_req_thread_func, &clock);
+  std::thread t(ptp_pdelay_req_thread_func, &clock);
   // Sleep less than the other thread is supposed to
   // -> thread should've sent only once (and sent only once)
   std::this_thread::sleep_for(std::chrono::milliseconds(300));

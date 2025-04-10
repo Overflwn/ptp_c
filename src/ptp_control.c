@@ -15,8 +15,8 @@ extern "C" {
 /// @param[in] instance The PTP clock instance
 /// @param[in] id The ID to search for
 /// @return Pointer to the delay_info, NULL if not found
-static ptp_delay_info_entry_t *
-search_delay_info(const timesync_clock_t *instance, const uint64_t id) {
+static ptp_delay_info_entry_t *search_delay_info(const ptp_clock_t *instance,
+                                                 const uint64_t id) {
   ptp_delay_info_entry_t *temp = instance->delay_infos;
   while (temp != NULL) {
     if (temp->delay_info.peer_id == id) {
@@ -33,7 +33,7 @@ search_delay_info(const timesync_clock_t *instance, const uint64_t id) {
 /// @param[in] instance The PTP clock instance
 /// @param[in] The ID to look for or create a new delay_info entry for
 /// @return Pointer to the new or existing delay_info entry
-static ptp_delay_info_entry_t *get_or_new_delay_info(timesync_clock_t *instance,
+static ptp_delay_info_entry_t *get_or_new_delay_info(ptp_clock_t *instance,
                                                      const uint64_t id) {
   ptp_delay_info_entry_t *temp = search_delay_info(instance, id);
   if (temp == NULL) {
@@ -57,7 +57,7 @@ static ptp_delay_info_entry_t *get_or_new_delay_info(timesync_clock_t *instance,
 ///        the PTP clock instance
 /// @param[in] instance The PTP clock instance
 /// @param[in] id The ID to look for and delete
-static void remove_delay_info(timesync_clock_t *instance, const uint64_t id) {
+static void remove_delay_info(ptp_clock_t *instance, const uint64_t id) {
   ptp_delay_info_entry_t *entry = search_delay_info(instance, id);
   if (entry != NULL) {
     entry->previous->next = entry->next;
@@ -119,8 +119,8 @@ static ptp_message_timestamp_t ns_to_ts(uint64_t ts) {
   return result;
 }
 
-void ptp_req_thread_func(timesync_clock_t *instance) {
-  uint8_t tx_buf[sizeof(ptp_message_pdelay_req_t)];
+void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
+  uint8_t tx_buf[2048];
   ptp_message_pdelay_req_t req = {{0}};
   req.header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_REQ);
   uint16_t sequence_id = 0;
@@ -154,7 +154,7 @@ void ptp_req_thread_func(timesync_clock_t *instance) {
   }
 }
 
-static void calculate_new_time(timesync_clock_t *instance,
+static void calculate_new_time(ptp_clock_t *instance,
                                ptp_delay_info_entry_t *delay_info,
                                void *recv_metadata, uint8_t *tx_buf) {
   char log_buf[512];
@@ -220,9 +220,9 @@ static void calculate_new_time(timesync_clock_t *instance,
   }
 }
 
-void ptp_thread_func(timesync_clock_t *instance) {
-  uint8_t rx_buf[512];
-  uint8_t tx_buf[512];
+void ptp_thread_func(ptp_clock_t *instance) {
+  uint8_t rx_buf[2048];
+  uint8_t tx_buf[2048];
   char log_buf[512];
   // We get this from the user-defined receive function
   // It might be for example metadata about the sender and receiver (i.e. srcIp,
