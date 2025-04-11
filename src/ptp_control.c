@@ -120,7 +120,6 @@ static ptp_message_timestamp_t ns_to_ts(uint64_t ts) {
 }
 
 void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
-  uint8_t tx_buf[sizeof(ptp_message_pdelay_req_t)];
   ptp_message_pdelay_req_t req = {{0}};
   req.header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_REQ);
   uint16_t sequence_id = 0;
@@ -130,15 +129,14 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
   req.header.log_message_interval = 0x7F;
   // origintimestamp shall be 0 (not needed for PDELAY_REQ)
 
-  memcpy(tx_buf, (void *)&req, sizeof(ptp_message_pdelay_req_t));
   char log_buf[512];
   while (!instance->stop) {
     if (instance->use_p2p) {
       instance->mutex_lock(instance->mutex);
-      int sent =
-          instance->send(instance->userdata,
-                         PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_EVENT,
-                         NULL, tx_buf, sizeof(ptp_message_pdelay_req_t));
+      int sent = instance->send(
+          instance->userdata,
+          PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_EVENT, NULL,
+          (uint8_t *)&req, sizeof(ptp_message_pdelay_req_t));
       if (sent < sizeof(ptp_message_pdelay_req_t) && instance->debug_log) {
         snprintf(log_buf, sizeof(log_buf),
                  "Failed to send PDelay_Req. (returnval %d)", sent);
@@ -158,19 +156,22 @@ static void calculate_new_time(ptp_clock_t *instance,
                                ptp_delay_info_entry_t *delay_info,
                                void *recv_metadata, uint8_t *tx_buf) {
   char log_buf[512];
-  if (delay_info->delay_info.last_calculated_delay > 0 && delay_info->delay_info.t1 != 0 && delay_info->delay_info.t2 != 0) {
+  if (delay_info->delay_info.last_calculated_delay > 0 &&
+      delay_info->delay_info.t1 != 0 && delay_info->delay_info.t2 != 0) {
     // TODO: int64 theoretically reduces the possible
     //       time range, what do?
     int64_t offset = ((int64_t)delay_info->delay_info.t2 -
                       (int64_t)delay_info->delay_info.t1) -
                      (int64_t)delay_info->delay_info.last_calculated_delay;
     // Adjust for a little bit of runtime overhead up to this point
-    offset += (int64_t)(instance->get_time_ns(instance->userdata) - instance->fup_received);
+    offset += (int64_t)(instance->get_time_ns(instance->userdata) -
+                        instance->fup_received);
     // TODO: Check returnval
     instance->set_time_offset_ns(instance->userdata, offset);
-    if (instance->use_p2p)
-    {
-      // Reset all timestamps so that we don't calculate false delays by accident when having bad timing (e.g. PDelayReq -> Sync+FUP -> New offset -> PDelayResp)
+    if (instance->use_p2p) {
+      // Reset all timestamps so that we don't calculate false delays by
+      // accident when having bad timing (e.g. PDelayReq -> Sync+FUP -> New
+      // offset -> PDelayResp)
       delay_info->delay_info.t1 = 0;
       delay_info->delay_info.t2 = 0;
       delay_info->delay_info.t3 = 0;
@@ -191,20 +192,21 @@ static void calculate_new_time(ptp_clock_t *instance,
       instance->debug_log(instance->userdata, log_buf);
     }
   } else {
-    if (instance->use_p2p)
-    {
+    if (instance->use_p2p) {
       // Reset T1 and T2 so that we don't block PDelay by accident
-      // calculate_new_time only gets called after FUP (in P2P mode) so this should be fine
+      // calculate_new_time only gets called after FUP (in P2P mode) so this
+      // should be fine
       delay_info->delay_info.t1 = 0;
       delay_info->delay_info.t2 = 0;
       instance->latest_t3 = 0;
     }
     // TODO: Notify user?
     if (instance->debug_log) {
-      snprintf(log_buf, sizeof(log_buf), "No offset or delay info has been calculated yet, ignoring new time.. (t1: %lu, t2: %lu)", delay_info->delay_info.t1, delay_info->delay_info.t2);
-      instance->debug_log(
-          instance->userdata,
-          log_buf);
+      snprintf(log_buf, sizeof(log_buf),
+               "No offset or delay info has been calculated yet, ignoring new "
+               "time.. (t1: %lu, t2: %lu)",
+               delay_info->delay_info.t1, delay_info->delay_info.t2);
+      instance->debug_log(instance->userdata, log_buf);
     }
   }
 
@@ -478,10 +480,10 @@ void ptp_thread_func(ptp_clock_t *instance) {
               get_or_new_delay_info(instance, id);
           if (delay_info != NULL) {
             // TODO: Check sequence_id to be safe
-            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0)
-            {
-              // We at least got a SYNC message and still haven't recalculated the offset (see calculate_new_offset function)
-              // but already initiated pdelay -> Ignore this PDelay iteration
+            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0) {
+              // We at least got a SYNC message and still haven't recalculated
+              // the offset (see calculate_new_offset function) but already
+              // initiated pdelay -> Ignore this PDelay iteration
               break;
             }
             uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
@@ -505,10 +507,10 @@ void ptp_thread_func(ptp_clock_t *instance) {
           uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
           ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
           if (delay_info != NULL) {
-            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0)
-            {
-              // We at least got a SYNC message and still haven't recalculated the offset (see calculate_new_offset function)
-              // but already initiated pdelay -> Ignore this PDelay iteration
+            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0) {
+              // We at least got a SYNC message and still haven't recalculated
+              // the offset (see calculate_new_offset function) but already
+              // initiated pdelay -> Ignore this PDelay iteration
               break;
             }
             uint64_t ts = ts_to_ns(&msg->response_origin_timestamp);
@@ -520,15 +522,15 @@ void ptp_thread_func(ptp_clock_t *instance) {
             if (t3 != 0 && t4 != 0 && t5 != 0 && t6 != 0) {
               uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
               delay_info->delay_info.last_calculated_delay = delay;
-              if (instance->debug_log)
-              {
+              if (instance->debug_log) {
                 snprintf(log_buf, sizeof(log_buf), "New PDelay: %lu", delay);
                 instance->debug_log(instance->userdata, log_buf);
               }
               // Trigger re-calculation of offset
               // Don't pass tx_buf as we don't want to send DELAY_REQ yet again
-              // TODO: *Don't* Recalculate time after PDelay RespFUP -> Needs testing
-              // calculate_new_time(instance, delay_info, recv_metadata, NULL);
+              // TODO: *Don't* Recalculate time after PDelay RespFUP -> Needs
+              // testing calculate_new_time(instance, delay_info, recv_metadata,
+              // NULL);
             } else if (instance->debug_log) {
               // TODO: Handle weird state
               snprintf(log_buf, sizeof(log_buf),
@@ -625,7 +627,8 @@ void ptp_thread_func(ptp_clock_t *instance) {
             ptp_message_create_header(instance, PTP_MESSAGE_TYPE_FOLLOW_UP);
         fup->precise_origin_timestamp = ns_to_ts(sent_ts);
         if (instance->debug_log) {
-          instance->debug_log(instance->userdata, "Sending FOLLOW_UP message..");
+          instance->debug_log(instance->userdata,
+                              "Sending FOLLOW_UP message..");
         }
         sent = instance->send(
             instance->userdata,
@@ -641,9 +644,11 @@ void ptp_thread_func(ptp_clock_t *instance) {
       sync_time = 0;
       instance->mutex_unlock(instance->mutex);
     }
-    // NOTE: This "counter" expects the sleep function to be exact and that the above receiving part does not introduce any runtime overhead (-> drifting),
-    // which is not the reality.
-    // TODO: Move SYNC+FUP & ANNOUNCE to a third thread function to be more accurate
+    // NOTE: This "counter" expects the sleep function to be exact and that the
+    // above receiving part does not introduce any runtime overhead (->
+    // drifting), which is not the reality.
+    // TODO: Move SYNC+FUP & ANNOUNCE to a third thread function to be more
+    // accurate
     instance->sleep_ms(1);
     announce_time++;
     sync_time++;

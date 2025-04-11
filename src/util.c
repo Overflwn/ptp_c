@@ -24,7 +24,6 @@ ptp_message_create_header(ptp_clock_t *instance,
       .log_message_interval = 0x7F,
   };
   header.flags.raw_val = 0;
-  header.flags.utc_offset_valid = 1;
   switch (message_type) {
   case PTP_MESSAGE_TYPE_SYNC:
     header.message_length = htobe16(sizeof(ptp_message_sync_t));
