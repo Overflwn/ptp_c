@@ -168,6 +168,8 @@ static void calculate_new_time(ptp_clock_t *instance,
                         instance->fup_received);
     // TODO: Check returnval
     instance->set_time_offset_ns(instance->userdata, offset);
+    uint64_t old_t1 = delay_info->delay_info.t1;
+    uint64_t old_t2 = delay_info->delay_info.t2;
     if (instance->use_p2p) {
       // Reset all timestamps so that we don't calculate false delays by
       // accident when having bad timing (e.g. PDelayReq -> Sync+FUP -> New
@@ -188,7 +190,7 @@ static void calculate_new_time(ptp_clock_t *instance,
     if (instance->debug_log) {
       snprintf(log_buf, sizeof(log_buf),
                "New offset: %" PRId64 " (t1 := %" PRIu64 ", t2 := %" PRIu64 ")",
-               offset, delay_info->delay_info.t1, delay_info->delay_info.t2);
+               offset, old_t1, old_t2);
       instance->debug_log(instance->userdata, log_buf);
     }
   } else {
@@ -351,7 +353,41 @@ void ptp_thread_func(ptp_clock_t *instance) {
           if (delay_info != NULL) {
             delay_info->delay_info.t1 =
                 ts_to_ns(&msg->precise_origin_timestamp);
-            calculate_new_time(instance, delay_info, recv_metadata, tx_buf);
+            if (!instance->use_p2p) {
+                
+              if (instance->debug_log) {
+                instance->debug_log(
+                    instance->userdata,
+                    "Not using P2P for delay calculation, sending DELAY_REQ..");
+              }
+
+              ptp_message_delay_req_t *resp = (ptp_message_delay_req_t *)tx_buf;
+              memset((void *)resp, 0, sizeof(ptp_message_delay_req_t));
+              resp->header =
+                  ptp_message_create_header(instance, PTP_MESSAGE_TYPE_DELAY_REQ);
+              resp->header.sequence_id =
+                  htobe16(delay_info->delay_info.sequence_id_delay_req);
+
+              int sent = instance->send(
+                  instance->userdata, PTP_CONTROL_SEND_UNICAST | PTP_CONTROL_SEND_EVENT,
+                  recv_metadata, (uint8_t *)resp, sizeof(ptp_message_delay_req_t));
+              uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
+              if (sent < sizeof(ptp_message_delay_req_t) && instance->debug_log) {
+                snprintf(log_buf, sizeof(log_buf),
+                        "Failed to send DELAY_REQ message. (returnval %d)", sent);
+                instance->debug_log(instance->userdata, log_buf);
+              } else {
+                if (instance->debug_log) {
+                  snprintf(log_buf, sizeof(log_buf), "DELAY_REQ sent. (t3 = %" PRIu64 ")",
+                          sent_ts);
+                  instance->debug_log(instance->userdata, log_buf);
+                }
+                delay_info->delay_info.t3 = sent_ts;
+                delay_info->delay_info.sequence_id_delay_req++;
+              }
+            } else {
+              calculate_new_time(instance, delay_info, recv_metadata, tx_buf);
+            }
           } else if (instance->debug_log) {
             instance->debug_log(instance->userdata,
                                 "No delay_info for sender, ignoring FOLLOW_UP");
