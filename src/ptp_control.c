@@ -206,7 +206,7 @@ static void calculate_new_time(ptp_clock_t *instance,
     if (instance->debug_log) {
       snprintf(log_buf, sizeof(log_buf),
                "No offset or delay info has been calculated yet, ignoring new "
-               "time.. (t1: %lu, t2: %lu)",
+               "time.. (t1: %" PRIu64 ", t2: %" PRIu64 ")",
                delay_info->delay_info.t1, delay_info->delay_info.t2);
       instance->debug_log(instance->userdata, log_buf);
     }
@@ -354,7 +354,7 @@ void ptp_thread_func(ptp_clock_t *instance) {
             delay_info->delay_info.t1 =
                 ts_to_ns(&msg->precise_origin_timestamp);
             if (!instance->use_p2p) {
-                
+
               if (instance->debug_log) {
                 instance->debug_log(
                     instance->userdata,
@@ -363,23 +363,27 @@ void ptp_thread_func(ptp_clock_t *instance) {
 
               ptp_message_delay_req_t *resp = (ptp_message_delay_req_t *)tx_buf;
               memset((void *)resp, 0, sizeof(ptp_message_delay_req_t));
-              resp->header =
-                  ptp_message_create_header(instance, PTP_MESSAGE_TYPE_DELAY_REQ);
+              resp->header = ptp_message_create_header(
+                  instance, PTP_MESSAGE_TYPE_DELAY_REQ);
               resp->header.sequence_id =
                   htobe16(delay_info->delay_info.sequence_id_delay_req);
 
-              int sent = instance->send(
-                  instance->userdata, PTP_CONTROL_SEND_UNICAST | PTP_CONTROL_SEND_EVENT,
-                  recv_metadata, (uint8_t *)resp, sizeof(ptp_message_delay_req_t));
+              int sent = instance->send(instance->userdata,
+                                        PTP_CONTROL_SEND_UNICAST |
+                                            PTP_CONTROL_SEND_EVENT,
+                                        recv_metadata, (uint8_t *)resp,
+                                        sizeof(ptp_message_delay_req_t));
               uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
-              if (sent < sizeof(ptp_message_delay_req_t) && instance->debug_log) {
+              if (sent < sizeof(ptp_message_delay_req_t) &&
+                  instance->debug_log) {
                 snprintf(log_buf, sizeof(log_buf),
-                        "Failed to send DELAY_REQ message. (returnval %d)", sent);
+                         "Failed to send DELAY_REQ message. (returnval %d)",
+                         sent);
                 instance->debug_log(instance->userdata, log_buf);
               } else {
                 if (instance->debug_log) {
-                  snprintf(log_buf, sizeof(log_buf), "DELAY_REQ sent. (t3 = %" PRIu64 ")",
-                          sent_ts);
+                  snprintf(log_buf, sizeof(log_buf),
+                           "DELAY_REQ sent. (t3 = %" PRIu64 ")", sent_ts);
                   instance->debug_log(instance->userdata, log_buf);
                 }
                 delay_info->delay_info.t3 = sent_ts;
@@ -559,7 +563,8 @@ void ptp_thread_func(ptp_clock_t *instance) {
               uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
               delay_info->delay_info.last_calculated_delay = delay;
               if (instance->debug_log) {
-                snprintf(log_buf, sizeof(log_buf), "New PDelay: %lu", delay);
+                snprintf(log_buf, sizeof(log_buf), "New PDelay: %" PRIu64,
+                         delay);
                 instance->debug_log(instance->userdata, log_buf);
               }
               // Trigger re-calculation of offset
