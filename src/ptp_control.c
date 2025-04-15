@@ -192,7 +192,7 @@ static void calculate_new_time(ptp_clock_t *instance,
         instance->debug_log(instance->userdata, log_buf);
       }
     }
-    instance->last_ts_after_correction = delay_info->delay_info.t2 + offset;
+    instance->last_ts_after_correction = delay_info->delay_info.t2 - offset;
     uint64_t old_t1 = delay_info->delay_info.t1;
     uint64_t old_t2 = delay_info->delay_info.t2;
     if (instance->use_p2p) {
