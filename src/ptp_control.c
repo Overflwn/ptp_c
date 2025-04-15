@@ -176,7 +176,7 @@ static void calculate_new_time(ptp_clock_t *instance,
       double our_delta = (double)(delay_info->delay_info.t2 -
                                   instance->last_ts_after_correction -
                                   delay_info->delay_info.last_calculated_delay);
-      double drift = 1.0 - ((our_delta - master_delta) / master_delta);
+      double drift = (our_delta - master_delta) / master_delta;
       if (drift > -0.1 && drift < 0.1) {
         if (instance->adjust_period(drift) && instance->debug_log) {
           snprintf(log_buf, sizeof(log_buf), "Adjusted period by %.09lf",
