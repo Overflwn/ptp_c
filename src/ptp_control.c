@@ -174,8 +174,7 @@ static void calculate_new_time(ptp_clock_t *instance,
       double master_delta = (double)(delay_info->delay_info.t1 -
                                      delay_info->delay_info.previous_t1);
       double our_delta = (double)(delay_info->delay_info.t2 -
-                                  instance->last_ts_after_correction -
-                                  delay_info->delay_info.last_calculated_delay);
+                                  instance->last_ts_after_correction);
       double drift = (our_delta - master_delta) / master_delta;
       if (drift > -0.1 && drift < 0.1) {
         if (instance->adjust_period(drift) && instance->debug_log) {
