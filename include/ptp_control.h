@@ -40,6 +40,10 @@ typedef bool (*ptp_set_time_offset_ns_cb)(void *, int64_t);
 /// @param[in] amount Time to sleep in milliseconds
 typedef void (*ptp_sleep_ms_func)(uint32_t);
 
+/// @brief Callback function to adjust the clock period by a given factor
+/// @param[in] factor The factor to adjust the clock period with
+typedef bool (*ptp_adjust_period_cb)(double);
+
 /// @brief Callback function to receive a new PTP frame. (**NON-BLOCKING**)
 /// @param[out] metadata Receive "metadata" that will get passed back to the
 /// send callback, e.g. sender IP + Port information, or nothing
@@ -58,7 +62,7 @@ typedef int (*ptp_receive_func)(void *, void **, uint8_t *, size_t);
 /// @param[in] amount Amount of bytes to send
 /// @return Amount of bytes sent
 typedef int (*ptp_send_func)(void *, ptp_send_flags_t, void *, uint8_t *,
-                         size_t);
+                             size_t);
 
 /// @brief Some kind of mutex type
 typedef void *ptp_mutex_type_t;
@@ -78,6 +82,10 @@ typedef void (*ptp_debug_log_func)(void *, const char *);
 typedef struct ptp_delay_info_s {
   uint64_t peer_id;
   uint16_t sequence_id_delay_req;
+
+  // Used for drift calculation
+  uint64_t previous_t1;
+
   uint64_t t1;
   uint64_t t2;
   uint64_t t3;
@@ -134,6 +142,10 @@ typedef struct ptp_clock_s {
 
   /// @brief Callback to offset the time
   ptp_set_time_offset_ns_cb set_time_offset_ns;
+
+  /// @brief [Opional] Callback to adjust the clock period to the drift from
+  /// itself to the master
+  ptp_adjust_period_cb adjust_period;
 
   /// @brief Some kind of sleep function (expects sleep in ms)
   ptp_sleep_ms_func sleep_ms;
@@ -195,6 +207,7 @@ typedef struct ptp_clock_s {
   // Internal variables, just set these to 0
   uint64_t latest_t3;
   uint64_t fup_received;
+  uint64_t last_ts_after_correction;
 
   struct {
     uint64_t last_sync_ts;

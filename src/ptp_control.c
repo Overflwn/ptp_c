@@ -164,10 +164,36 @@ static void calculate_new_time(ptp_clock_t *instance,
                       (int64_t)delay_info->delay_info.t1) -
                      (int64_t)delay_info->delay_info.last_calculated_delay;
     // Adjust for a little bit of runtime overhead up to this point
-    offset += (int64_t)(instance->get_time_ns(instance->userdata) -
-                        instance->fup_received);
+    // offset += (int64_t)(instance->get_time_ns(instance->userdata) -
+    //                     instance->fup_received);
     // TODO: Check returnval
     instance->set_time_offset_ns(instance->userdata, offset);
+    // uint64_t ts = instance->get_time_ns(instance->userdata);
+    // Get the master time delta
+    if (instance->adjust_period) {
+      double master_delta = (double)(delay_info->delay_info.t1 -
+                                     delay_info->delay_info.previous_t1);
+      double our_delta = (double)(delay_info->delay_info.t2 -
+                                  instance->last_ts_after_correction -
+                                  delay_info->delay_info.last_calculated_delay);
+      double drift = 1.0 - ((our_delta - master_delta) / master_delta);
+      if (drift > -0.1 || drift < 0.1) {
+        if (instance->adjust_period(drift) && instance->debug_log) {
+          snprintf(log_buf, sizeof(log_buf), "Adjusted period by %.09lf",
+                   drift);
+          instance->debug_log(instance->userdata, log_buf);
+        } else if (instance->debug_log) {
+          snprintf(log_buf, sizeof(log_buf),
+                   "Failed to adjust period by %.09lf", drift);
+          instance->debug_log(instance->userdata, log_buf);
+        }
+      } else if (instance->debug_log) {
+        snprintf(log_buf, sizeof(log_buf),
+                 "Unplausible clock drift (factor: %.09lf), ignoring..", drift);
+        instance->debug_log(instance->userdata, log_buf);
+      }
+    }
+    instance->last_ts_after_correction = delay_info->delay_info.t2 + offset;
     uint64_t old_t1 = delay_info->delay_info.t1;
     uint64_t old_t2 = delay_info->delay_info.t2;
     if (instance->use_p2p) {
@@ -351,6 +377,8 @@ void ptp_thread_func(ptp_clock_t *instance) {
           // TODO: Check if sequence_id is reasonable (== sequence_id from last
           // SYNC message)
           if (delay_info != NULL) {
+            // Save previous t1 for drift calculation
+            delay_info->delay_info.previous_t1 = delay_info->delay_info.t1;
             delay_info->delay_info.t1 =
                 ts_to_ns(&msg->precise_origin_timestamp);
             if (!instance->use_p2p) {
