@@ -171,6 +171,11 @@ static void calculate_new_time(ptp_clock_t *instance,
 
     if (instance->sync_loss_threshold_ns < labs(offset)) {
       instance->statistics.sync_loss_count++;
+      if (instance->debug_log) {
+        instance->debug_log(instance->userdata,
+                            "Sync loss due to offset between master time and "
+                            "slave time being too large");
+      }
     }
 
     if (delay_info->delay_info.t2 - instance->statistics.last_sync_ts >
@@ -188,6 +193,14 @@ static void calculate_new_time(ptp_clock_t *instance,
       double our_delta = (double)(delay_info->delay_info.t2 -
                                   instance->last_ts_after_correction);
       double drift = (our_delta - master_delta) / master_delta;
+      if (instance->debug_log) {
+        snprintf(log_buf, sizeof(log_buf),
+                 "New drift: %.09lf (our delta: %.02lf (%" PRIu64 " - %" PRIu64
+                 "), master delta: %.02lf)",
+                 drift, our_delta, delay_info->delay_info.t2,
+                 instance->last_ts_after_correction, master_delta);
+        instance->debug_log(instance->userdata, log_buf);
+      }
       if (drift > -0.1 && drift < 0.1) {
         if (instance->adjust_period(drift) && instance->debug_log) {
           snprintf(log_buf, sizeof(log_buf), "Adjusted period by %.09lf",
@@ -304,6 +317,10 @@ void ptp_thread_func(ptp_clock_t *instance) {
       if (diff > instance->sync_loss_timeout_ns) {
         instance->statistics.sync_loss_count++;
         instance->statistics.in_sync = false;
+        if (instance->debug_log) {
+          instance->debug_log(instance->userdata,
+                              "Lost sync due to sync loss timeout!");
+        }
       } else {
         instance->statistics.in_sync = true;
       }
