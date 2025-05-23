@@ -182,7 +182,16 @@ typedef struct ptp_clock_s {
 
   ptp_message_port_identity_t source_port_identity;
 
-  /// @brief Infos used for the announce messages
+  /// @brief The maximum time in ns to wait for a new Sync+FUP signal before
+  /// we're considered to be "out of sync"
+  uint64_t sync_loss_timeout_ns;
+
+  /// @brief The maximum deviation from the master time before we're considered
+  /// to be out-of-sync at the time of the Sync+FUP signal
+  uint64_t sync_loss_threshold_ns;
+
+  /// @brief Infos used for the announce messages or in the case of slave mode
+  /// the information of the master
   struct {
     uint32_t announce_msg_interval_ms;
     uint32_t sync_msg_interval_ms;
@@ -213,6 +222,9 @@ typedef struct ptp_clock_s {
     uint64_t last_sync_ts;
     uint64_t last_delay_ns;
     int64_t last_offset_ns;
+    uint32_t sync_loss_count;
+    uint32_t max_update_time;
+    bool in_sync;
   } statistics;
 } ptp_clock_t;
 

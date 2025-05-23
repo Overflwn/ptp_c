@@ -168,6 +168,11 @@ static void calculate_new_time(ptp_clock_t *instance,
     //                     instance->fup_received);
     // TODO: Check returnval
     instance->set_time_offset_ns(instance->userdata, offset);
+
+    if (instance->sync_loss_threshold_ns < labs(offset)) {
+      instance->statistics.sync_loss_count++;
+    }
+
     // uint64_t ts = instance->get_time_ns(instance->userdata);
     // Get the master time delta
     if (instance->adjust_period) {
@@ -285,6 +290,18 @@ void ptp_thread_func(ptp_clock_t *instance) {
   uint32_t announce_time = 0;
   uint32_t sync_time = 0;
   while (!instance->stop) {
+    // Check if we're still in sync
+    if (instance->statistics.last_sync_ts > 0) {
+      const uint64_t cur_time = instance->get_time_ns(instance);
+      const uint64_t diff = cur_time - instance->statistics.last_sync_ts;
+      if (diff > instance->sync_loss_timeout_ns) {
+        instance->statistics.sync_loss_count++;
+        instance->statistics.in_sync = false;
+      } else {
+        instance->statistics.in_sync = true;
+      }
+    }
+
     int amount_received = instance->receive(instance->userdata, &recv_metadata,
                                             rx_buf, sizeof(rx_buf));
     if (amount_received > 0) {
