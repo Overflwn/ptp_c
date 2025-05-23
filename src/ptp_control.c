@@ -173,6 +173,13 @@ static void calculate_new_time(ptp_clock_t *instance,
       instance->statistics.sync_loss_count++;
     }
 
+    if (delay_info->delay_info.t2 - instance->statistics.last_sync_ts >
+        instance->statistics.max_update_time) {
+      instance->statistics.max_update_time =
+          (uint32_t)(delay_info->delay_info.t2 -
+                     instance->statistics.last_sync_ts);
+    }
+
     // uint64_t ts = instance->get_time_ns(instance->userdata);
     // Get the master time delta
     if (instance->adjust_period) {
