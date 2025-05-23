@@ -20,7 +20,8 @@ Both P2P and E2E delay calculation is supported. Although for the master you mig
 
 ## TODOs
 
-- [ ] Add additional parameter to the send (+ receive?) function callback to differentiate between PTP General messages and PTP Event messages (-> different UDP ports)
+- [x] Add additional parameter to the send (+ receive?) function callback to differentiate between PTP General messages and PTP Event messages (-> different UDP ports)
+- [ ] Split up master code (announce, SYNC/FUP, ...) from Rx stuff into a seperate thread to make the timing more precise
 - [ ] Extend Integration Tests
 - [ ] Provide user example software running either a master or slave clock via UDP
 - [ ] Clean up code, add more documentation
