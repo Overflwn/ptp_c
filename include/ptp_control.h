@@ -157,7 +157,7 @@ typedef struct ptp_clock_s {
   ptp_sleep_ms_func sleep_ms;
 
   /// @brief  Some kind of receive function that returns a full PTP frame
-  ///         (BLOCKING)
+  ///         (NON-BLOCKING)
   ptp_receive_func receive;
 
   /// @brief Some kind of send function that sends a PTP frame
@@ -254,7 +254,18 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance);
 ///         Run this as a thread function and pass your instance as the thread
 ///         data
 /// @param[in] instance The PTP instance
-void ptp_thread_func(ptp_clock_t *instance);
+void ptp_rx_thread_func(ptp_clock_t *instance);
+
+/// @brief  This a thread function that cyclically sends SYNC + FUP & ANNOUNCE
+/// messages as a master.
+///
+///         Run this as a thread function and pass your instance as the thread
+///         data
+///
+///         NOTE: If your instance is a slave you won't need this thread.
+///
+/// @param[in] instance The PTP instance
+void ptp_tx_thread_func(ptp_clock_t *instance);
 
 // bool ptp_handle_message(timesync_clock_t *instance, uint8_t *rx_buf,
 //                         size_t len);

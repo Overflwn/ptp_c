@@ -298,7 +298,7 @@ static void calculate_new_time(ptp_clock_t *instance,
   }
 }
 
-void ptp_thread_func(ptp_clock_t *instance) {
+void ptp_rx_thread_func(ptp_clock_t *instance) {
   uint8_t rx_buf[512];
   uint8_t tx_buf[512];
   char log_buf[512];
@@ -665,6 +665,19 @@ void ptp_thread_func(ptp_clock_t *instance) {
       // instance->debug_log(instance->userdata, log_buf);
     }
 
+    // TODO: Could we somehow make the receive callback blocking but still allow
+    // for the thread to quit even while it is blocking on rx?
+    instance->sleep_ms(1);
+  }
+}
+
+void ptp_tx_thread_func(ptp_clock_t *instance) {
+  uint8_t tx_buf[512] = {0};
+  char log_buf[128] = {0};
+
+  uint32_t announce_time = 0;
+  uint32_t sync_time = 0;
+  while (!instance->stop) {
     if (instance->clock_type == PTP_CLOCK_TYPE_MASTER &&
         announce_time >= instance->master.announce_msg_interval_ms) {
       instance->mutex_lock(instance->mutex);
@@ -753,11 +766,6 @@ void ptp_thread_func(ptp_clock_t *instance) {
       sync_time = 0;
       instance->mutex_unlock(instance->mutex);
     }
-    // NOTE: This "counter" expects the sleep function to be exact and that the
-    // above receiving part does not introduce any runtime overhead (->
-    // drifting), which is not the reality.
-    // TODO: Move SYNC+FUP & ANNOUNCE to a third thread function to be more
-    // accurate
     instance->sleep_ms(1);
     announce_time++;
     sync_time++;
