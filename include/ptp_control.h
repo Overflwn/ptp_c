@@ -12,6 +12,7 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
+/// @brief Flags passed to the send callback (ORed)
 typedef enum {
   /// @brief Whether the message to send is supposed to be sent multicast
   PTP_CONTROL_SEND_MULTICAST = 0x00,
@@ -23,61 +24,65 @@ typedef enum {
 } ptp_send_flags_t;
 
 /// @brief Callback function to retrieve a nanosecond timestamp.
+/// @param[in] userdata the userdata pointer taken from the instance
 /// @return Timestamp in nanoseconds
 typedef uint64_t (*ptp_get_time_ns_cb)(void *);
 
 /// @brief Callback function to set the time (nanosecond time).
+/// @param[in] userdata the userdata pointer taken from the instance
 /// @param[in] timestamp Timestamp as uint64_t
 /// @return True on success
-typedef bool (*ptp_set_time_ns_cb)(void *, uint64_t);
+typedef bool (*ptp_set_time_ns_cb)(void *userdata, uint64_t timestamp);
 
 /// @brief Callback function to offset the time (nanosecond offset).
+/// @param[in] userdata the userdata pointer taken from the instance
 /// @param[in] offset Nanosecond offset as uint64_t
 /// @return True on success
-typedef bool (*ptp_set_time_offset_ns_cb)(void *, int64_t);
+typedef bool (*ptp_set_time_offset_ns_cb)(void *userdata, int64_t offset);
 
 /// @brief Callback function to let the calling thread sleep
 /// @param[in] amount Time to sleep in milliseconds
-typedef void (*ptp_sleep_ms_func)(uint32_t);
+typedef void (*ptp_sleep_ms_func)(uint32_t amount);
 
 /// @brief Callback function to adjust the clock period by a given factor
 /// @param[in] factor The factor to adjust the clock period with
-typedef bool (*ptp_adjust_period_cb)(double);
+typedef bool (*ptp_adjust_period_cb)(double factor);
 
 /// @brief Callback function to receive a new PTP frame. (**NON-BLOCKING**)
+/// @param[in] userdata the userdata pointer taken from the instance
 /// @param[out] metadata Receive "metadata" that will get passed back to the
 /// send callback, e.g. sender IP + Port information, or nothing
 /// @param[in] buffer Buffer to write the received data into
 /// @param[in] buffer_size Buffersize
 /// @return Amount of bytes received, 0 for no data and <0 for error
-typedef int (*ptp_receive_func)(void *, void **, uint8_t *, size_t);
+typedef int (*ptp_receive_func)(void *userdata, void **metadata,
+                                uint8_t *buffer, size_t buffer_size);
 
 /// @brief Callback function to send a new PTP frame.
-/// @param[in] target_type Whether to send the PTP frame back to the sender (:=
-/// unicast) of
-///            the last received frame (-> good usecase for the "metadata") or
-///            multicast
+/// @param[in] userdata the userdata pointer taken from the instance
+/// @param[in] flags sending flags
 /// @param[in] metadata The "metadata" coming from the last receive call
 /// @param[in] buffer Buffer to send
 /// @param[in] amount Amount of bytes to send
 /// @return Amount of bytes sent
-typedef int (*ptp_send_func)(void *, ptp_send_flags_t, void *, uint8_t *,
-                             size_t);
+typedef int (*ptp_send_func)(void *userdata, ptp_send_flags_t flags,
+                             void *metadata, uint8_t *buffer, size_t amount);
 
 /// @brief Some kind of mutex type
 typedef void *ptp_mutex_type_t;
 
 /// @brief Callback function to lock a mutex
 /// @param[in] mutex The mutex to lock
-typedef void (*ptp_mutex_lock_func)(ptp_mutex_type_t);
+typedef void (*ptp_mutex_lock_func)(ptp_mutex_type_t mutex);
 
 /// @brief Callback function to unlock a mutex
 /// @param[in] mutex The mutex to unlock
-typedef void (*ptp_mutex_unlock_func)(ptp_mutex_type_t);
+typedef void (*ptp_mutex_unlock_func)(ptp_mutex_type_t mutex);
 
 /// @brief Optional callback function to print debug logs
+/// @param[in] userdata the userdata pointer taken from the instance
 /// @param[in] text Text to log
-typedef void (*ptp_debug_log_func)(void *, const char *);
+typedef void (*ptp_debug_log_func)(void *userdata, const char *text);
 
 typedef struct ptp_delay_info_s {
   uint64_t peer_id;
@@ -104,7 +109,7 @@ typedef struct ptp_delay_info_entry_s {
   struct ptp_delay_info_entry_s *next;
 } ptp_delay_info_entry_t;
 
-typedef enum {
+typedef enum ptp_clock_type_e {
   PTP_CLOCK_TYPE_SLAVE,
   PTP_CLOCK_TYPE_MASTER,
 } ptp_clock_type_t;
@@ -168,8 +173,6 @@ typedef struct ptp_clock_s {
   ptp_mutex_lock_func mutex_lock;
   ptp_mutex_unlock_func mutex_unlock;
 
-  ptp_delay_info_entry_t *delay_infos;
-
   /// @brief In what interval to cyclically send PDELAY_REQ messages in.
   uint32_t pdelay_req_interval_ms;
 
@@ -214,16 +217,24 @@ typedef struct ptp_clock_s {
   void *userdata;
 
   // Internal variables, just set these to 0
+  ptp_delay_info_entry_t *delay_infos;
   uint64_t latest_t3;
   uint64_t fup_received;
   uint64_t last_ts_after_correction;
 
+  /// @brief Statistics that are accessible at any time
   struct {
+    /// @brief Last time we synced
     uint64_t last_sync_ts;
+    /// @brief Last delay value
     uint64_t last_delay_ns;
+    /// @brief Last offset value
     int64_t last_offset_ns;
+    /// @brief Sync Loss Count
     uint32_t sync_loss_count;
+    /// @brief The maximum time that passed until a sync
     uint32_t max_update_time;
+    /// @brief Whether we're currently in sync with the master
     bool in_sync;
   } statistics;
 } ptp_clock_t;

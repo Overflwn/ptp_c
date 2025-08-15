@@ -1,6 +1,11 @@
 /// @file ptp_message.h
 ///
 /// General type and struct definitions used in the IEEE1588v2 protocol.
+/// NOTE: All of the structs are packed in order for the library to directly
+/// read / write from / into message byte buffers.
+///       The downside of packed structs are slightly higher field accessing
+///       times, however, this is still way faster than de-"serializing" a byte
+///       buffer field by field.
 #ifndef PTP_MESSAGE_H
 #define PTP_MESSAGE_H
 
