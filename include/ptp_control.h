@@ -26,7 +26,7 @@ typedef enum {
 /// @brief Callback function to retrieve a nanosecond timestamp.
 /// @param[in] userdata the userdata pointer taken from the instance
 /// @return Timestamp in nanoseconds
-typedef uint64_t (*ptp_get_time_ns_cb)(void *);
+typedef uint64_t (*ptp_get_time_ns_cb)(void *userdata);
 
 /// @brief Callback function to set the time (nanosecond time).
 /// @param[in] userdata the userdata pointer taken from the instance
@@ -45,7 +45,8 @@ typedef bool (*ptp_set_time_offset_ns_cb)(void *userdata, int64_t offset);
 typedef void (*ptp_sleep_ms_func)(uint32_t amount);
 
 /// @brief Callback function to adjust the clock period by a given factor
-/// @param[in] factor The factor to adjust the clock period with
+/// @param[in] factor The factor to adjust the clock period with, e.g. 0.8 ->
+/// new_freq = old_freq * 0.8
 typedef bool (*ptp_adjust_period_cb)(double factor);
 
 /// @brief Callback function to receive a new PTP frame. (**NON-BLOCKING**)
