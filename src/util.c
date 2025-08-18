@@ -39,6 +39,7 @@ ptp_message_create_header(ptp_clock_t *instance,
   case PTP_MESSAGE_TYPE_FOLLOW_UP:
     header.message_length = htobe16(sizeof(ptp_message_follow_up_t));
     header.control_field = 0x02;
+    header.flags.two_step = 1;
     header.log_message_interval =
         (uint8_t)log((double)instance->master.sync_msg_interval_ms / 1000.0);
     break;
