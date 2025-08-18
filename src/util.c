@@ -61,6 +61,7 @@ ptp_message_create_header(ptp_clock_t *instance,
     header.message_length =
         htobe16(sizeof(ptp_message_pdelay_resp_follow_up_t));
     header.control_field = 0x05;
+    header.flags.two_step = 1;
     break;
   case PTP_MESSAGE_TYPE_ANNOUNCE:
     header.message_length = htobe16(sizeof(ptp_message_announce_t));
