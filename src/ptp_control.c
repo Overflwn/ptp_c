@@ -238,6 +238,8 @@ static void calculate_new_time(ptp_clock_t *instance,
         instance->get_time_ns(instance->userdata);
     instance->statistics.last_delay_ns =
         delay_info->delay_info.last_calculated_delay;
+    // Save previous t1 for drift calculation
+    delay_info->delay_info.previous_t1 = old_t1;
     if (instance->debug_log) {
       snprintf(log_buf, sizeof(log_buf),
                "New offset: %" PRId64 " (t1 := %" PRIu64 ", t2 := %" PRIu64 ")",
@@ -419,8 +421,6 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           // TODO: Check if sequence_id is reasonable (== sequence_id from last
           // SYNC message)
           if (delay_info != NULL) {
-            // Save previous t1 for drift calculation
-            delay_info->delay_info.previous_t1 = delay_info->delay_info.t1;
             delay_info->delay_info.t1 =
                 ts_to_ns(&msg->precise_origin_timestamp);
             if (!instance->use_p2p) {
