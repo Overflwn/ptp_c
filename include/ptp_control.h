@@ -19,8 +19,11 @@ typedef enum {
   /// @brief Whether the message to send is supposed to be sent unicast
   PTP_CONTROL_SEND_UNICAST = 0x01,
   /// @brief Whether the message to send is a PTP event or general message
+  PTP_CONTROL_SEND_GENERAL = 0x00,
   PTP_CONTROL_SEND_EVENT = 0x10,
-  PTP_CONTROL_SEND_GENERAL = 0x20,
+  // @brief Whether the message to send is a PDelay message (PDelay on IP uses a
+  // different multicast IP)
+  PTP_CONTROL_SEND_PDELAY = 0x20,
 } ptp_send_flags_t;
 
 /// @brief Callback function to retrieve a nanosecond timestamp.

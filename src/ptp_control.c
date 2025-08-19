@@ -135,8 +135,9 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
       instance->mutex_lock(instance->mutex);
       int sent = instance->send(
           instance->userdata,
-          PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_EVENT, NULL,
-          (uint8_t *)&req, sizeof(ptp_message_pdelay_req_t));
+          PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_EVENT |
+              PTP_CONTROL_SEND_PDELAY,
+          NULL, (uint8_t *)&req, sizeof(ptp_message_pdelay_req_t));
       if (sent < sizeof(ptp_message_pdelay_req_t) && instance->debug_log) {
         snprintf(log_buf, sizeof(log_buf),
                  "Failed to send PDelay_Req. (returnval %d)", sent);
