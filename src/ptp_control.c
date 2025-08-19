@@ -315,14 +315,15 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
     if (instance->statistics.last_sync_ts > 0) {
       const uint64_t cur_time = instance->get_time_ns(instance);
       const uint64_t diff = cur_time - instance->statistics.last_sync_ts;
-      if (diff > instance->sync_loss_timeout_ns) {
+      if (diff > instance->sync_loss_timeout_ns &&
+          instance->statistics.in_sync) {
         instance->statistics.sync_loss_count++;
         instance->statistics.in_sync = false;
         if (instance->debug_log) {
           instance->debug_log(instance->userdata,
                               "Lost sync due to sync loss timeout!");
         }
-      } else {
+      } else if (diff <= instance->sync_loss_timeout_ns) {
         instance->statistics.in_sync = true;
       }
     }
