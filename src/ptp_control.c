@@ -186,9 +186,9 @@ static void calculate_new_time(ptp_clock_t *instance,
                      instance->statistics.last_sync_ts);
     }
 
-    // uint64_t ts = instance->get_time_ns(instance->userdata);
     // Get the master time delta
-    if (instance->adjust_period) {
+    // But only if we have corrected the time at least once already
+    if (instance->adjust_period && instance->last_ts_after_correction > 0) {
       double master_delta = (double)(delay_info->delay_info.t1 -
                                      delay_info->delay_info.previous_t1);
       double our_delta = (double)(delay_info->delay_info.t2 -
