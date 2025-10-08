@@ -153,6 +153,53 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
   }
 }
 
+static void swap(double* a, double* b) {
+    double temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+static int partition(double arr[], int low, int high) {
+
+    // Initialize pivot to be the first element
+    double p = arr[low];
+    int i = low;
+    int j = high;
+
+    while (i < j) {
+
+        // Find the first element greater than
+        // the pivot (from starting)
+        while (arr[i] <= p && i <= high - 1) {
+            i++;
+        }
+
+        // Find the first element smaller than
+        // the pivot (from last)
+        while (arr[j] > p && j >= low + 1) {
+            j--;
+        }
+        if (i < j) {
+            swap(&arr[i], &arr[j]);
+        }
+    }
+    swap(&arr[low], &arr[j]);
+    return j;
+}
+
+static void quick_sort(double arr[], int low, int high) {
+    if (low < high) {
+
+        // call partition function to find Partition Index
+        int pi = partition(arr, low, high);
+
+        // Recursively call quickSort() for left and right
+        // half based on Partition Index
+        quick_sort(arr, low, pi - 1);
+        quick_sort(arr, pi + 1, high);
+    }
+}
+
 static void calculate_new_time(ptp_clock_t *instance,
                                ptp_delay_info_entry_t *delay_info,
                                void *recv_metadata, uint8_t *tx_buf) {
@@ -177,6 +224,13 @@ static void calculate_new_time(ptp_clock_t *instance,
                             "Sync loss due to offset between master time and "
                             "slave time being too large");
       }
+      if (instance->sync_changed) {
+        instance->sync_changed(false);
+      }
+    } else {
+      if (instance->sync_changed) {
+        instance->sync_changed(true);
+      }
     }
 
     if (delay_info->delay_info.t2 - instance->statistics.last_sync_ts >
@@ -186,36 +240,54 @@ static void calculate_new_time(ptp_clock_t *instance,
                      instance->statistics.last_sync_ts);
     }
 
+    // uint64_t ts = instance->get_time_ns(instance->userdata);
     // Get the master time delta
-    // But only if we have corrected the time at least once already
+    // We need to have corrected the time at least once
     if (instance->adjust_period && instance->last_ts_after_correction > 0) {
       double master_delta = (double)(delay_info->delay_info.t1 -
                                      delay_info->delay_info.previous_t1);
       double our_delta = (double)(delay_info->delay_info.t2 -
                                   instance->last_ts_after_correction);
       double drift = (our_delta - master_delta) / master_delta;
-      if (instance->debug_log) {
-        snprintf(log_buf, sizeof(log_buf),
-                 "New drift: %.09lf (our delta: %.02lf (%" PRIu64 " - %" PRIu64
-                 "), master delta: %.02lf)",
-                 drift, our_delta, delay_info->delay_info.t2,
-                 instance->last_ts_after_correction, master_delta);
-        instance->debug_log(instance->userdata, log_buf);
-      }
-      if (drift > -0.1 && drift < 0.1) {
-        if (instance->adjust_period(drift) && instance->debug_log) {
-          snprintf(log_buf, sizeof(log_buf), "Adjusted period by %.09lf",
-                   drift);
-          instance->debug_log(instance->userdata, log_buf);
-        } else if (instance->debug_log) {
+      static double last_drifts[10] = {0.0};
+      static int num_drifts = 0;
+      if (num_drifts < 10) {
+        last_drifts[num_drifts++] = drift;
+      } else {
+        memmove(last_drifts, &last_drifts[1], sizeof(double)*9);
+        last_drifts[num_drifts-1] = drift;
+
+        double copy[10];
+        memcpy(copy, last_drifts, sizeof(double)*10);
+        quick_sort(copy, 0, 9);
+        // Take the mean drift
+        drift = copy[4];
+        // Reset the buffer
+        num_drifts = 0;
+
+        if (instance->debug_log) {
           snprintf(log_buf, sizeof(log_buf),
-                   "Failed to adjust period by %.09lf", drift);
+                  "New drift: %.09lf (our delta: %.02lf (%" PRIu64 " - %" PRIu64
+                  "), master delta: %.02lf (%"PRIu64" - %"PRIu64"))",
+                  drift, our_delta, delay_info->delay_info.t2,
+                  instance->last_ts_after_correction, master_delta, delay_info->delay_info.t1, delay_info->delay_info.previous_t1);
           instance->debug_log(instance->userdata, log_buf);
         }
-      } else if (instance->debug_log) {
-        snprintf(log_buf, sizeof(log_buf),
-                 "Unplausible clock drift (factor: %.09lf), ignoring..", drift);
-        instance->debug_log(instance->userdata, log_buf);
+        if (drift > -0.1 && drift < 0.1) {
+          if (instance->adjust_period(drift) && instance->debug_log) {
+            snprintf(log_buf, sizeof(log_buf), "Adjusted period by %.09lf",
+                    drift);
+            instance->debug_log(instance->userdata, log_buf);
+          } else if (instance->debug_log) {
+            snprintf(log_buf, sizeof(log_buf),
+                    "Failed to adjust period by %.09lf", drift);
+            instance->debug_log(instance->userdata, log_buf);
+          }
+        } else if (instance->debug_log) {
+          snprintf(log_buf, sizeof(log_buf),
+                  "Unplausible clock drift (factor: %.09lf), ignoring..", drift);
+          instance->debug_log(instance->userdata, log_buf);
+        }
       }
     }
     instance->last_ts_after_correction = delay_info->delay_info.t2 - offset;
@@ -238,12 +310,11 @@ static void calculate_new_time(ptp_clock_t *instance,
         instance->get_time_ns(instance->userdata);
     instance->statistics.last_delay_ns =
         delay_info->delay_info.last_calculated_delay;
-    // Save previous t1 for drift calculation
     delay_info->delay_info.previous_t1 = old_t1;
     if (instance->debug_log) {
       snprintf(log_buf, sizeof(log_buf),
-               "New offset: %" PRId64 " (t1 := %" PRIu64 ", t2 := %" PRIu64 ")",
-               offset, old_t1, old_t2);
+               "New offset: %" PRId64 " (t1 := %" PRIu64 ", t2 := %" PRIu64 ", delay: %"PRIu64")",
+               offset, old_t1, old_t2, delay_info->delay_info.last_calculated_delay);
       instance->debug_log(instance->userdata, log_buf);
     }
   } else {
@@ -253,7 +324,7 @@ static void calculate_new_time(ptp_clock_t *instance,
       // should be fine
       delay_info->delay_info.t1 = 0;
       delay_info->delay_info.t2 = 0;
-      instance->latest_t3 = 0;
+      // instance->latest_t3 = 0;
     }
     // TODO: Notify user?
     if (instance->debug_log) {
@@ -317,13 +388,15 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
     if (instance->statistics.last_sync_ts > 0) {
       const uint64_t cur_time = instance->get_time_ns(instance);
       const uint64_t diff = cur_time - instance->statistics.last_sync_ts;
-      if (diff > instance->sync_loss_timeout_ns &&
-          instance->statistics.in_sync) {
+      if (diff > instance->sync_loss_timeout_ns && instance->statistics.in_sync) {
         instance->statistics.sync_loss_count++;
         instance->statistics.in_sync = false;
         if (instance->debug_log) {
           instance->debug_log(instance->userdata,
                               "Lost sync due to sync loss timeout!");
+        }
+        if (instance->sync_changed) {
+          instance->sync_changed(false);
         }
       } else if (diff <= instance->sync_loss_timeout_ns) {
         instance->statistics.in_sync = true;

@@ -52,6 +52,10 @@ typedef void (*ptp_sleep_ms_func)(uint32_t amount);
 /// new_freq = old_freq * 0.8
 typedef bool (*ptp_adjust_period_cb)(double factor);
 
+/// @brief Callback function to notify the user that the sync status changed due to timeout of threshold crossing
+/// @param[in] in_sync whether the clock is in sync now
+typedef void (*ptp_sync_changed_cb)(bool in_sync);
+
 /// @brief Callback function to receive a new PTP frame. (**NON-BLOCKING**)
 /// @param[in] userdata the userdata pointer taken from the instance
 /// @param[out] metadata Receive "metadata" that will get passed back to the
@@ -155,6 +159,9 @@ typedef struct ptp_clock_s {
   /// @brief [Opional] Callback to adjust the clock period to the drift from
   /// itself to the master
   ptp_adjust_period_cb adjust_period;
+
+  /// @brief [Optional] Callback to notify the user of a sync status change
+  ptp_sync_changed_cb sync_changed;
 
   /// @brief Some kind of sleep function (expects sleep in ms)
   ptp_sleep_ms_func sleep_ms;
