@@ -138,15 +138,22 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
           PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_EVENT |
               PTP_CONTROL_SEND_PDELAY,
           NULL, (uint8_t *)&req, sizeof(ptp_message_pdelay_req_t));
-      if (sent < sizeof(ptp_message_pdelay_req_t) && instance->debug_log) {
-        snprintf(log_buf, sizeof(log_buf),
-                 "Failed to send PDelay_Req. (returnval %d)", sent);
-        instance->debug_log(instance->userdata, log_buf);
+      if (sent < sizeof(ptp_message_pdelay_req_t)) {
+        if (instance->debug_log) {
+          snprintf(log_buf, sizeof(log_buf),
+                  "Failed to send PDelay_Req. (returnval %d)", sent);
+          instance->debug_log(instance->userdata, log_buf);
+        }
+      } else {
+        instance->latest_t3 = instance->get_time_ns_tx(instance->userdata);
+        if (instance->debug_log) {
+          snprintf(log_buf, sizeof(log_buf), "Sent PDELAY_REQ, t3: %"PRIu64"", instance->latest_t3);
+          instance->debug_log(instance->userdata, log_buf);
+        }
+        // TODO: Handle error, incomplete send, etc.
+        sequence_id++;
+        req.header.sequence_id = htons(sequence_id);
       }
-      instance->latest_t3 = instance->get_time_ns_tx(instance->userdata);
-      // TODO: Handle error, incomplete send, etc.
-      sequence_id++;
-      req.header.sequence_id = htons(sequence_id);
       instance->mutex_unlock(instance->mutex);
     }
     instance->sleep_ms(instance->pdelay_req_interval_ms);
@@ -429,6 +436,12 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           ptp_delay_info_entry_t *delay_info = get_or_new_delay_info(
               instance, port_identity_to_id(&msg->header.source_port_identity));
           if (delay_info != NULL) {
+            if (instance->latest_t3 != 0) {
+              if (instance->debug_log) {
+                instance->debug_log(instance->userdata, "PDelay iteration in progress, ignoring SYNC..");
+              }
+              break;
+            }
             delay_info->delay_info.t2 = received_ts;
             if (instance->debug_log) {
               snprintf(log_buf, sizeof(log_buf), "Received t2: %" PRIu64,
@@ -663,7 +676,8 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               get_or_new_delay_info(instance, id);
           if (delay_info != NULL) {
             // TODO: Check sequence_id to be safe
-            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0) {
+            // if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0) {
+            if (instance->latest_t3 == 0) {
               // We at least got a SYNC message and still haven't recalculated
               // the offset (see calculate_new_offset function) but already
               // initiated pdelay -> Ignore this PDelay iteration
@@ -673,6 +687,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
             delay_info->delay_info.t3 = instance->latest_t3;
             delay_info->delay_info.t4 = ts;
             delay_info->delay_info.t6 = received_ts;
+            instance->latest_t3 = 0;
           } else if (instance->debug_log) {
             // TODO: Handle erroneous state
             instance->debug_log(instance->userdata,
@@ -690,7 +705,8 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           uint64_t id = port_identity_to_id(&msg->header.source_port_identity);
           ptp_delay_info_entry_t *delay_info = search_delay_info(instance, id);
           if (delay_info != NULL) {
-            if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0) {
+            // if (delay_info->delay_info.t2 != 0 || instance->latest_t3 == 0) {
+            if (delay_info->delay_info.t3 == 0) {
               // We at least got a SYNC message and still haven't recalculated
               // the offset (see calculate_new_offset function) but already
               // initiated pdelay -> Ignore this PDelay iteration
@@ -706,8 +722,8 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
               delay_info->delay_info.last_calculated_delay = delay;
               if (instance->debug_log) {
-                snprintf(log_buf, sizeof(log_buf), "New PDelay: %" PRIu64,
-                         delay);
+                snprintf(log_buf, sizeof(log_buf), "New PDelay: %" PRIu64 " (t3: %"PRIu64" t4: %"PRIu64" t5: %"PRIu64" t6: %"PRIu64")",
+                         delay, t3, t4, t5, t6);
                 instance->debug_log(instance->userdata, log_buf);
               }
               // Trigger re-calculation of offset
