@@ -141,13 +141,14 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
       if (sent < sizeof(ptp_message_pdelay_req_t)) {
         if (instance->debug_log) {
           snprintf(log_buf, sizeof(log_buf),
-                  "Failed to send PDelay_Req. (returnval %d)", sent);
+                   "Failed to send PDelay_Req. (returnval %d)", sent);
           instance->debug_log(instance->userdata, log_buf);
         }
       } else {
         instance->latest_t3 = instance->get_time_ns_tx(instance->userdata);
         if (instance->debug_log) {
-          snprintf(log_buf, sizeof(log_buf), "Sent PDELAY_REQ, t3: %"PRIu64"", instance->latest_t3);
+          snprintf(log_buf, sizeof(log_buf), "Sent PDELAY_REQ, t3: %" PRIu64 "",
+                   instance->latest_t3);
           instance->debug_log(instance->userdata, log_buf);
         }
         // TODO: Handle error, incomplete send, etc.
@@ -160,51 +161,51 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
   }
 }
 
-static void swap(double* a, double* b) {
-    double temp = *a;
-    *a = *b;
-    *b = temp;
+static void swap(double *a, double *b) {
+  double temp = *a;
+  *a = *b;
+  *b = temp;
 }
 
 static int partition(double arr[], int low, int high) {
 
-    // Initialize pivot to be the first element
-    double p = arr[low];
-    int i = low;
-    int j = high;
+  // Initialize pivot to be the first element
+  double p = arr[low];
+  int i = low;
+  int j = high;
 
-    while (i < j) {
+  while (i < j) {
 
-        // Find the first element greater than
-        // the pivot (from starting)
-        while (arr[i] <= p && i <= high - 1) {
-            i++;
-        }
-
-        // Find the first element smaller than
-        // the pivot (from last)
-        while (arr[j] > p && j >= low + 1) {
-            j--;
-        }
-        if (i < j) {
-            swap(&arr[i], &arr[j]);
-        }
+    // Find the first element greater than
+    // the pivot (from starting)
+    while (arr[i] <= p && i <= high - 1) {
+      i++;
     }
-    swap(&arr[low], &arr[j]);
-    return j;
+
+    // Find the first element smaller than
+    // the pivot (from last)
+    while (arr[j] > p && j >= low + 1) {
+      j--;
+    }
+    if (i < j) {
+      swap(&arr[i], &arr[j]);
+    }
+  }
+  swap(&arr[low], &arr[j]);
+  return j;
 }
 
 static void quick_sort(double arr[], int low, int high) {
-    if (low < high) {
+  if (low < high) {
 
-        // call partition function to find Partition Index
-        int pi = partition(arr, low, high);
+    // call partition function to find Partition Index
+    int pi = partition(arr, low, high);
 
-        // Recursively call quickSort() for left and right
-        // half based on Partition Index
-        quick_sort(arr, low, pi - 1);
-        quick_sort(arr, pi + 1, high);
-    }
+    // Recursively call quickSort() for left and right
+    // half based on Partition Index
+    quick_sort(arr, low, pi - 1);
+    quick_sort(arr, pi + 1, high);
+  }
 }
 
 static void calculate_new_time(ptp_clock_t *instance,
@@ -261,11 +262,11 @@ static void calculate_new_time(ptp_clock_t *instance,
       if (num_drifts < 10) {
         last_drifts[num_drifts++] = drift;
       } else {
-        memmove(last_drifts, &last_drifts[1], sizeof(double)*9);
-        last_drifts[num_drifts-1] = drift;
+        memmove(last_drifts, &last_drifts[1], sizeof(double) * 9);
+        last_drifts[num_drifts - 1] = drift;
 
         double copy[10];
-        memcpy(copy, last_drifts, sizeof(double)*10);
+        memcpy(copy, last_drifts, sizeof(double) * 10);
         quick_sort(copy, 0, 9);
         // Take the mean drift
         drift = copy[4];
@@ -273,26 +274,29 @@ static void calculate_new_time(ptp_clock_t *instance,
         num_drifts = 0;
 
         if (instance->debug_log) {
-          snprintf(log_buf, sizeof(log_buf),
-                  "New drift: %.09lf (our delta: %.02lf (%" PRIu64 " - %" PRIu64
-                  "), master delta: %.02lf (%"PRIu64" - %"PRIu64"))",
-                  drift, our_delta, delay_info->delay_info.t2,
-                  instance->last_ts_after_correction, master_delta, delay_info->delay_info.t1, delay_info->delay_info.previous_t1);
+          snprintf(
+              log_buf, sizeof(log_buf),
+              "New drift: %.09lf (our delta: %.02lf (%" PRIu64 " - %" PRIu64
+              "), master delta: %.02lf (%" PRIu64 " - %" PRIu64 "))",
+              drift, our_delta, delay_info->delay_info.t2,
+              instance->last_ts_after_correction, master_delta,
+              delay_info->delay_info.t1, delay_info->delay_info.previous_t1);
           instance->debug_log(instance->userdata, log_buf);
         }
         if (drift > -0.1 && drift < 0.1) {
           if (instance->adjust_period(drift) && instance->debug_log) {
             snprintf(log_buf, sizeof(log_buf), "Adjusted period by %.09lf",
-                    drift);
+                     drift);
             instance->debug_log(instance->userdata, log_buf);
           } else if (instance->debug_log) {
             snprintf(log_buf, sizeof(log_buf),
-                    "Failed to adjust period by %.09lf", drift);
+                     "Failed to adjust period by %.09lf", drift);
             instance->debug_log(instance->userdata, log_buf);
           }
         } else if (instance->debug_log) {
           snprintf(log_buf, sizeof(log_buf),
-                  "Unplausible clock drift (factor: %.09lf), ignoring..", drift);
+                   "Unplausible clock drift (factor: %.09lf), ignoring..",
+                   drift);
           instance->debug_log(instance->userdata, log_buf);
         }
       }
@@ -320,8 +324,10 @@ static void calculate_new_time(ptp_clock_t *instance,
     delay_info->delay_info.previous_t1 = old_t1;
     if (instance->debug_log) {
       snprintf(log_buf, sizeof(log_buf),
-               "New offset: %" PRId64 " (t1 := %" PRIu64 ", t2 := %" PRIu64 ", delay: %"PRIu64")",
-               offset, old_t1, old_t2, delay_info->delay_info.last_calculated_delay);
+               "New offset: %" PRId64 " (t1 := %" PRIu64 ", t2 := %" PRIu64
+               ", delay: %" PRIu64 ")",
+               offset, old_t1, old_t2,
+               delay_info->delay_info.last_calculated_delay);
       instance->debug_log(instance->userdata, log_buf);
     }
   } else {
@@ -395,7 +401,8 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
     if (instance->statistics.last_sync_ts > 0) {
       const uint64_t cur_time = instance->get_time_ns(instance);
       const uint64_t diff = cur_time - instance->statistics.last_sync_ts;
-      if (diff > instance->sync_loss_timeout_ns && instance->statistics.in_sync) {
+      if (diff > instance->sync_loss_timeout_ns &&
+          instance->statistics.in_sync) {
         instance->statistics.sync_loss_count++;
         instance->statistics.in_sync = false;
         if (instance->debug_log) {
@@ -438,7 +445,9 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           if (delay_info != NULL) {
             if (instance->latest_t3 != 0) {
               if (instance->debug_log) {
-                instance->debug_log(instance->userdata, "PDelay iteration in progress, ignoring SYNC..");
+                instance->debug_log(
+                    instance->userdata,
+                    "PDelay iteration in progress, ignoring SYNC..");
               }
               break;
             }
@@ -626,7 +635,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
 
           int sent = instance->send(
               instance->userdata,
-              PTP_CONTROL_SEND_UNICAST | PTP_CONTROL_SEND_EVENT, recv_metadata,
+              PTP_CONTROL_SEND_PDELAY | PTP_CONTROL_SEND_EVENT, recv_metadata,
               (uint8_t *)resp, sizeof(ptp_message_pdelay_resp_t));
           if (sent < sizeof(ptp_message_pdelay_resp_t) && instance->debug_log) {
             snprintf(log_buf, sizeof(log_buf),
@@ -650,7 +659,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
                    &((uint8_t *)&secs)[2], 6);
 
             sent = instance->send(instance->userdata,
-                                  PTP_CONTROL_SEND_UNICAST |
+                                  PTP_CONTROL_SEND_PDELAY |
                                       PTP_CONTROL_SEND_GENERAL,
                                   recv_metadata, (uint8_t *)fup,
                                   sizeof(ptp_message_pdelay_resp_follow_up_t));
@@ -722,7 +731,9 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
               delay_info->delay_info.last_calculated_delay = delay;
               if (instance->debug_log) {
-                snprintf(log_buf, sizeof(log_buf), "New PDelay: %" PRIu64 " (t3: %"PRIu64" t4: %"PRIu64" t5: %"PRIu64" t6: %"PRIu64")",
+                snprintf(log_buf, sizeof(log_buf),
+                         "New PDelay: %" PRIu64 " (t3: %" PRIu64 " t4: %" PRIu64
+                         " t5: %" PRIu64 " t6: %" PRIu64 ")",
                          delay, t3, t4, t5, t6);
                 instance->debug_log(instance->userdata, log_buf);
               }
