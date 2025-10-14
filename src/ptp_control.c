@@ -154,6 +154,7 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
         // TODO: Handle error, incomplete send, etc.
         sequence_id++;
         req.header.sequence_id = htons(sequence_id);
+        instance->statistics.tx_pdelay_req_count++;
       }
       instance->mutex_unlock(instance->mutex);
     }
@@ -381,6 +382,7 @@ static void calculate_new_time(ptp_clock_t *instance,
       }
       delay_info->delay_info.t3 = sent_ts;
       delay_info->delay_info.sequence_id_delay_req++;
+      instance->statistics.tx_delay_req_count++;
     }
   }
 }
@@ -429,6 +431,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
         instance->mutex_lock(instance->mutex);
         switch (header->message_type) {
         case PTP_MESSAGE_TYPE_SYNC: {
+          instance->statistics.rx_sync_count++;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata, "Received SYNC message");
           }
@@ -474,6 +477,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           break;
         }
         case PTP_MESSAGE_TYPE_DELAY_REQ: {
+          instance->statistics.rx_delay_req_count++;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata,
                                 "Received DELAY_REQ message");
@@ -498,6 +502,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           break;
         }
         case PTP_MESSAGE_TYPE_FOLLOW_UP: {
+          instance->statistics.rx_fup_count++;
           instance->fup_received = received_ts;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata,
@@ -553,6 +558,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
                 }
                 delay_info->delay_info.t3 = sent_ts;
                 delay_info->delay_info.sequence_id_delay_req++;
+                instance->statistics.tx_delay_resp_count++;
               }
             } else {
               calculate_new_time(instance, delay_info, recv_metadata, tx_buf);
@@ -564,6 +570,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           break;
         }
         case PTP_MESSAGE_TYPE_DELAY_RESP: {
+          instance->statistics.rx_delay_resp_count++;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata,
                                 "Received DELAY_RESP message");
@@ -614,6 +621,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           break;
         }
         case PTP_MESSAGE_TYPE_PDELAY_REQ: {
+          instance->statistics.rx_pdelay_req_count++;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata,
                                 "Received PDELAY_REQ message");
@@ -643,6 +651,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
                      sent);
             instance->debug_log(instance->userdata, log_buf);
           } else {
+            instance->statistics.tx_pdelay_resp_count++;
             // TODO: Check sent amount
             uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
             ptp_message_pdelay_resp_follow_up_t *fup =
@@ -670,11 +679,14 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
                        "(returnval %d)",
                        sent);
               instance->debug_log(instance->userdata, log_buf);
+            } else {
+              instance->statistics.tx_pdelay_resp_fup_count++;
             }
           }
           break;
         }
         case PTP_MESSAGE_TYPE_PDELAY_RESP: {
+          instance->statistics.rx_pdelay_resp_count++;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata,
                                 "Received PDELAY_RESP message");
@@ -705,6 +717,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           break;
         }
         case PTP_MESSAGE_TYPE_PDELAY_RESP_FOLLOW_UP: {
+          instance->statistics.rx_pdelay_resp_fup_count++;
           if (instance->debug_log) {
             instance->debug_log(instance->userdata,
                                 "Received PDELAY_RESP_FOLLOW_UP message");
@@ -758,6 +771,18 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           }
           break;
         }
+        case PTP_MESSAGE_TYPE_ANNOUNCE: {
+          instance->statistics.rx_announce_count++;
+          break;
+        }
+        default:
+          if (instance->debug_log) {
+            snprintf(log_buf, sizeof(log_buf),
+                     "Unsupported message type: 0x%02" PRIX8,
+                     header->message_type);
+            instance->debug_log(instance->userdata, log_buf);
+          }
+          break;
         }
         instance->mutex_unlock(instance->mutex);
       }
@@ -816,6 +841,8 @@ void ptp_tx_thread_func(ptp_clock_t *instance) {
         snprintf(log_buf, sizeof(log_buf),
                  "Failed to send ANNOUNCE message. (retunval %d)", sent);
         instance->debug_log(instance->userdata, log_buf);
+      } else {
+        instance->statistics.tx_announce_count++;
       }
 
       announce_time = 0;
@@ -845,6 +872,7 @@ void ptp_tx_thread_func(ptp_clock_t *instance) {
                  "Failed to send SYNC message. (retunval %d)", sent);
         instance->debug_log(instance->userdata, log_buf);
       } else {
+        instance->statistics.tx_sync_count++;
         ptp_message_follow_up_t *fup = (ptp_message_follow_up_t *)tx_buf;
         memset(fup, 0, sizeof(ptp_message_follow_up_t));
         fup->header =
@@ -862,6 +890,8 @@ void ptp_tx_thread_func(ptp_clock_t *instance) {
           snprintf(log_buf, sizeof(log_buf),
                    "Failed to send FOLLOW_UP message. (retunval %d)", sent);
           instance->debug_log(instance->userdata, log_buf);
+        } else {
+          instance->statistics.tx_fup_count++;
         }
       }
 

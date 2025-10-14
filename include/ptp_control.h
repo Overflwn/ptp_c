@@ -52,7 +52,8 @@ typedef void (*ptp_sleep_ms_func)(uint32_t amount);
 /// new_freq = old_freq * 0.8
 typedef bool (*ptp_adjust_period_cb)(double factor);
 
-/// @brief Callback function to notify the user that the sync status changed due to timeout of threshold crossing
+/// @brief Callback function to notify the user that the sync status changed due
+/// to timeout of threshold crossing
 /// @param[in] in_sync whether the clock is in sync now
 typedef void (*ptp_sync_changed_cb)(bool in_sync);
 
@@ -247,6 +248,38 @@ typedef struct ptp_clock_s {
     uint32_t max_update_time;
     /// @brief Whether we're currently in sync with the master
     bool in_sync;
+    /// @brief Rx Announce Message count
+    uint32_t rx_announce_count;
+    /// @brief Rx Sync Message count
+    uint32_t rx_sync_count;
+    /// @brief Rx FollowUp Message count
+    uint32_t rx_fup_count;
+    /// @brief Rx DelayReq (E2E) Message count
+    uint32_t rx_delay_req_count;
+    /// @brief Rx DelayResp (E2E) Message count
+    uint32_t rx_delay_resp_count;
+    /// @brief Rx PDelayReq Message count
+    uint32_t rx_pdelay_req_count;
+    /// @brief Rx PDelayResp Message count
+    uint32_t rx_pdelay_resp_count;
+    /// @brief Rx PDelayRespFollowUp Message count
+    uint32_t rx_pdelay_resp_fup_count;
+    /// @brief Tx Announce Message count
+    uint32_t tx_announce_count;
+    /// @brief Tx Sync Message count
+    uint32_t tx_sync_count;
+    /// @brief Tx FollowUp Message count
+    uint32_t tx_fup_count;
+    /// @brief Tx DelayReq Message count
+    uint32_t tx_delay_req_count;
+    /// @brief Tx DelayResp Message count
+    uint32_t tx_delay_resp_count;
+    /// @brief Tx PDelayReq Message count
+    uint32_t tx_pdelay_req_count;
+    /// @brief Tx PDelayResp Message count
+    uint32_t tx_pdelay_resp_count;
+    /// @brief Tx PDelayRespFollowUp Message count
+    uint32_t tx_pdelay_resp_fup_count;
   } statistics;
 } ptp_clock_t;
 
