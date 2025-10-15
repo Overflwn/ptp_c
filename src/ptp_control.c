@@ -794,6 +794,8 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           instance->master.utc_offset = ntohs(msg->current_utc_offset);
           instance->master.steps_removed = ntohs(msg->steps_removed);
           instance->master.time_source = msg->time_source;
+          instance->master.domain_num = msg->header.domain_num;
+          instance->master.flags = ntohs(msg->header.flags.raw_val);
           break;
         }
         default:

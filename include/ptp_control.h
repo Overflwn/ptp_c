@@ -217,6 +217,10 @@ typedef struct ptp_clock_s {
     uint8_t grandmaster_clock_identity[8];
     uint16_t steps_removed;
     uint8_t time_source;
+
+    // Only filled when receiving ANNOUNCE messages as slave
+    uint8_t domain_num;
+    uint16_t flags;
   } master;
 
   /// @brief Whether this clock is acting as a master or slave
