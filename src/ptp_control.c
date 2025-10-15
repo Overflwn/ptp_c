@@ -787,10 +787,12 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
                  msg->grandmaster_clock_identity,
                  sizeof(instance->master.grandmaster_clock_identity));
           instance->master.clock_quality = msg->grandmaster_clock_quality;
+          instance->master.clock_quality.scaled_log_variance =
+              ntohs(instance->master.clock_quality.scaled_log_variance);
           instance->master.grandmaster_priority_1 = msg->grandmaster_priority_1;
           instance->master.grandmaster_priority_2 = msg->grandmaster_priority_2;
-          instance->master.utc_offset = msg->current_utc_offset;
-          instance->master.steps_removed = msg->steps_removed;
+          instance->master.utc_offset = ntohs(msg->current_utc_offset);
+          instance->master.steps_removed = ntohs(msg->steps_removed);
           instance->master.time_source = msg->time_source;
           break;
         }
