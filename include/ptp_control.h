@@ -70,12 +70,12 @@ typedef int (*ptp_receive_func)(void *userdata, void **metadata,
 /// @brief Callback function to send a new PTP frame.
 /// @param[in] userdata the userdata pointer taken from the instance
 /// @param[in] flags sending flags
-/// @param[in] metadata The "metadata" coming from the last receive call
+/// @param[inout] metadata The "metadata" coming from the last receive call
 /// @param[in] buffer Buffer to send
 /// @param[in] amount Amount of bytes to send
 /// @return Amount of bytes sent
 typedef int (*ptp_send_func)(void *userdata, ptp_send_flags_t flags,
-                             void *metadata, uint8_t *buffer, size_t amount);
+                             void **metadata, uint8_t *buffer, size_t amount);
 
 /// @brief Some kind of mutex type
 typedef void *ptp_mutex_type_t;

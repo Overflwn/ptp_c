@@ -368,7 +368,7 @@ static void calculate_new_time(ptp_clock_t *instance,
 
     int sent = instance->send(
         instance->userdata, PTP_CONTROL_SEND_UNICAST | PTP_CONTROL_SEND_EVENT,
-        recv_metadata, (uint8_t *)resp, sizeof(ptp_message_delay_req_t));
+        &recv_metadata, (uint8_t *)resp, sizeof(ptp_message_delay_req_t));
     uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
     if (sent < sizeof(ptp_message_delay_req_t) && instance->debug_log) {
       snprintf(log_buf, sizeof(log_buf),
@@ -489,10 +489,11 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               ptp_message_create_header(instance, PTP_MESSAGE_TYPE_DELAY_RESP);
           resp->receive_timestamp = ns_to_ts(received_ts);
           resp->requesting_port_identity = msg->header.source_port_identity;
-          int sent = instance->send(
-              instance->userdata,
-              PTP_CONTROL_SEND_UNICAST | PTP_CONTROL_SEND_GENERAL,
-              recv_metadata, (uint8_t *)resp, sizeof(ptp_message_delay_resp_t));
+          int sent = instance->send(instance->userdata,
+                                    PTP_CONTROL_SEND_UNICAST |
+                                        PTP_CONTROL_SEND_GENERAL,
+                                    &recv_metadata, (uint8_t *)resp,
+                                    sizeof(ptp_message_delay_resp_t));
           if (sent < sizeof(ptp_message_delay_resp_t) && instance->debug_log) {
             snprintf(log_buf, sizeof(log_buf),
                      "Failed to send DELAY_RESP. (returnval: %d)", sent);
@@ -541,7 +542,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               int sent = instance->send(instance->userdata,
                                         PTP_CONTROL_SEND_UNICAST |
                                             PTP_CONTROL_SEND_EVENT,
-                                        recv_metadata, (uint8_t *)resp,
+                                        &recv_metadata, (uint8_t *)resp,
                                         sizeof(ptp_message_delay_req_t));
               uint64_t sent_ts = instance->get_time_ns_tx(instance->userdata);
               if (sent < sizeof(ptp_message_delay_req_t) &&
@@ -643,7 +644,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
 
           int sent = instance->send(
               instance->userdata,
-              PTP_CONTROL_SEND_PDELAY | PTP_CONTROL_SEND_EVENT, recv_metadata,
+              PTP_CONTROL_SEND_PDELAY | PTP_CONTROL_SEND_EVENT, &recv_metadata,
               (uint8_t *)resp, sizeof(ptp_message_pdelay_resp_t));
           if (sent < sizeof(ptp_message_pdelay_resp_t) && instance->debug_log) {
             snprintf(log_buf, sizeof(log_buf),
@@ -670,7 +671,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
             sent = instance->send(instance->userdata,
                                   PTP_CONTROL_SEND_PDELAY |
                                       PTP_CONTROL_SEND_GENERAL,
-                                  recv_metadata, (uint8_t *)fup,
+                                  &recv_metadata, (uint8_t *)fup,
                                   sizeof(ptp_message_pdelay_resp_follow_up_t));
             if (sent < sizeof(ptp_message_pdelay_resp_follow_up_t) &&
                 instance->debug_log) {
