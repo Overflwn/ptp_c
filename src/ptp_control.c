@@ -773,6 +773,25 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
         }
         case PTP_MESSAGE_TYPE_ANNOUNCE: {
           instance->statistics.rx_announce_count++;
+
+          if (PTP_CLOCK_TYPE_MASTER == instance->clock_type) {
+            if (instance->debug_log) {
+              instance->debug_log(instance->userdata,
+                                  "We are master, ignoring ANNOUNCE..");
+            }
+            break;
+          }
+          ptp_message_announce_t *msg = (ptp_message_announce_t *)rx_buf;
+
+          memcpy(instance->master.grandmaster_clock_identity,
+                 msg->grandmaster_clock_identity,
+                 sizeof(instance->master.grandmaster_clock_identity));
+          instance->master.clock_quality = msg->grandmaster_clock_quality;
+          instance->master.grandmaster_priority_1 = msg->grandmaster_priority_1;
+          instance->master.grandmaster_priority_2 = msg->grandmaster_priority_2;
+          instance->master.utc_offset = msg->current_utc_offset;
+          instance->master.steps_removed = msg->steps_removed;
+          instance->master.time_source = msg->time_source;
           break;
         }
         default:
