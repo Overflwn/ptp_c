@@ -138,7 +138,7 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
           PTP_CONTROL_SEND_MULTICAST | PTP_CONTROL_SEND_EVENT |
               PTP_CONTROL_SEND_PDELAY,
           NULL, (uint8_t *)&req, sizeof(ptp_message_pdelay_req_t));
-      if (sent < sizeof(ptp_message_pdelay_req_t)) {
+      if (sent < 0 || sent < sizeof(ptp_message_pdelay_req_t)) {
         if (instance->debug_log) {
           snprintf(log_buf, sizeof(log_buf),
                    "Failed to send PDelay_Req. (returnval %d)", sent);
