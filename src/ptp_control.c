@@ -120,7 +120,7 @@ static ptp_message_timestamp_t ns_to_ts(uint64_t ts) {
 }
 
 void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
-  ptp_message_pdelay_req_t req = {{0}};
+  ptp_message_pdelay_req_t req = {0};
   req.header = ptp_message_create_header(instance, PTP_MESSAGE_TYPE_PDELAY_REQ);
   uint16_t sequence_id = 0;
   req.header.sequence_id = htons(sequence_id);
@@ -226,7 +226,10 @@ static void calculate_new_time(ptp_clock_t *instance,
     // TODO: Check returnval
     instance->set_time_offset_ns(instance->userdata, offset);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wabsolute-value"
     if (instance->sync_loss_threshold_ns < labs(offset)) {
+#pragma GCC diagnostic pop
       instance->statistics.sync_loss_count++;
       if (instance->debug_log) {
         instance->debug_log(instance->userdata,
