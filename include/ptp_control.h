@@ -199,10 +199,12 @@ typedef struct ptp_clock_s {
 
   /// @brief The maximum time in ns to wait for a new Sync+FUP signal before
   /// we're considered to be "out of sync"
+  /// Set to 0 to disable sync loss detection based on timeouts
   uint64_t sync_loss_timeout_ns;
 
   /// @brief The maximum deviation from the master time before we're considered
   /// to be out-of-sync at the time of the Sync+FUP signal
+  /// Set to 0 to disable sync loss detection based on threshold crossing
   uint64_t sync_loss_threshold_ns;
 
   /// @brief Infos used for the announce messages or in the case of slave mode
@@ -237,6 +239,7 @@ typedef struct ptp_clock_s {
   uint64_t latest_t3;
   uint64_t fup_received;
   uint64_t last_ts_after_correction;
+  uint16_t last_pdelay_req_sequence_id;
 
   /// @brief Statistics that are accessible at any time
   struct {
@@ -284,6 +287,10 @@ typedef struct ptp_clock_s {
     uint32_t tx_pdelay_resp_count;
     /// @brief Tx PDelayRespFollowUp Message count
     uint32_t tx_pdelay_resp_fup_count;
+    /// @brief Total count of successful PDelay iterations
+    uint32_t total_pdelay_success_count;
+    /// @brief Whether the last 3 PDelay iterations were successful
+    bool last_pdelays_success[3];
   } statistics;
 } ptp_clock_t;
 
