@@ -119,12 +119,16 @@ static ptp_message_timestamp_t ns_to_ts(uint64_t ts) {
   return result;
 }
 
-/// @brief Check whether at least 2 pdelay measurements were successful and if in the last 3 pdelay iterations at least one was successful, if not then notify a sync loss change
+/// @brief Check whether at least 2 pdelay measurements were successful and if
+/// in the last 3 pdelay iterations at least one was successful, if not then
+/// notify a sync loss change
 /// @param instance The PTP clock instance
 static bool check_pdelay_syncloss(ptp_clock_t *instance) {
   if (instance->statistics.total_pdelay_success_count >= 2) {
     bool last_3_failed = true;
-    for (size_t i = 0; i < sizeof(instance->statistics.last_pdelays_success) / sizeof(bool); i++) {
+    for (size_t i = 0;
+         i < sizeof(instance->statistics.last_pdelays_success) / sizeof(bool);
+         i++) {
       if (instance->statistics.last_pdelays_success[i]) {
         last_3_failed = false;
         break;
@@ -140,7 +144,8 @@ static bool check_pdelay_syncloss(ptp_clock_t *instance) {
     //   instance->statistics.in_sync = false;
     //   if (instance->debug_log) {
     //     instance->debug_log(instance->userdata,
-    //                         "Sync loss due to 3 consecutive failed PDelay iterations");
+    //                         "Sync loss due to 3 consecutive failed PDelay
+    //                         iterations");
     //   }
     //   if (instance->sync_changed) {
     //     instance->sync_changed(false);
@@ -180,17 +185,22 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
       } else {
         if (instance->last_pdelay_req_sequence_id != 0) {
           if (instance->statistics.tx_pdelay_req_count >= 3) {
-            memmove(instance->statistics.last_pdelays_success, &instance->statistics.last_pdelays_success[1], sizeof(bool) * 2);
+            memmove(instance->statistics.last_pdelays_success,
+                    &instance->statistics.last_pdelays_success[1],
+                    sizeof(bool) * 2);
             instance->statistics.last_pdelays_success[0] = false;
           } else {
-            instance->statistics.last_pdelays_success[instance->statistics.tx_pdelay_req_count] = false;
+            instance->statistics.last_pdelays_success
+                [instance->statistics.tx_pdelay_req_count] = false;
           }
-          if (instance->statistics.in_sync && !check_pdelay_syncloss(instance)) {
+          if (instance->statistics.in_sync &&
+              !check_pdelay_syncloss(instance)) {
             instance->statistics.sync_loss_count++;
             instance->statistics.in_sync = false;
             if (instance->debug_log) {
-              instance->debug_log(instance->userdata,
-                                  "Sync loss due to 3 consecutive failed PDelay iterations");
+              instance->debug_log(
+                  instance->userdata,
+                  "Sync loss due to 3 consecutive failed PDelay iterations");
             }
             if (instance->sync_changed) {
               instance->sync_changed(false);
@@ -281,7 +291,8 @@ static void calculate_new_time(ptp_clock_t *instance,
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wabsolute-value"
-    if (instance->sync_loss_threshold_ns > 0 && instance->sync_loss_threshold_ns < llabs(offset)) {
+    if (instance->sync_loss_threshold_ns > 0 &&
+        instance->sync_loss_threshold_ns < llabs(offset)) {
 #pragma GCC diagnostic pop
       instance->statistics.sync_loss_count++;
       if (instance->debug_log) {
@@ -297,7 +308,8 @@ static void calculate_new_time(ptp_clock_t *instance,
       }
     } else {
       if (!instance->statistics.in_sync && instance->sync_changed) {
-        if (!instance->use_p2p || (instance->use_p2p && check_pdelay_syncloss(instance))) {
+        if (!instance->use_p2p ||
+            (instance->use_p2p && check_pdelay_syncloss(instance))) {
           instance->statistics.in_sync = true;
           instance->sync_changed(true);
         }
@@ -465,7 +477,8 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
     if (instance->statistics.last_sync_ts > 0) {
       const uint64_t cur_time = instance->get_time_ns(instance);
       const uint64_t diff = cur_time - instance->statistics.last_sync_ts;
-      if (instance->sync_loss_timeout_ns > 0 && diff > instance->sync_loss_timeout_ns &&
+      if (instance->sync_loss_timeout_ns > 0 &&
+          diff > instance->sync_loss_timeout_ns &&
           instance->statistics.in_sync) {
         instance->statistics.sync_loss_count++;
         instance->statistics.in_sync = false;
@@ -767,8 +780,10 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               // the offset (see calculate_new_offset function) but already
               // initiated pdelay -> Ignore this PDelay iteration
               break;
-            } else if (instance->last_pdelay_req_sequence_id != msg->header.sequence_id) {
-              // PDelay response doesn't match last request, ignoring.. (might be old)
+            } else if (instance->last_pdelay_req_sequence_id !=
+                       msg->header.sequence_id) {
+              // PDelay response doesn't match last request, ignoring.. (might
+              // be old)
               break;
             }
             uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
@@ -800,8 +815,10 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               // the offset (see calculate_new_offset function) but already
               // initiated pdelay -> Ignore this PDelay iteration
               break;
-            } else if (instance->last_pdelay_req_sequence_id != msg->header.sequence_id) {
-              // PDelay response doesn't match last request, ignoring.. (might be old)
+            } else if (instance->last_pdelay_req_sequence_id !=
+                       msg->header.sequence_id) {
+              // PDelay response doesn't match last request, ignoring.. (might
+              // be old)
               break;
             }
             uint64_t ts = ts_to_ns(&msg->response_origin_timestamp);
@@ -822,21 +839,26 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               }
               instance->statistics.total_pdelay_success_count++;
               if (instance->statistics.tx_pdelay_req_count >= 3) {
-                memmove(instance->statistics.last_pdelays_success, &instance->statistics.last_pdelays_success[1], sizeof(bool) * 2);
+                memmove(instance->statistics.last_pdelays_success,
+                        &instance->statistics.last_pdelays_success[1],
+                        sizeof(bool) * 2);
                 instance->statistics.last_pdelays_success[0] = true;
               } else {
-                instance->statistics.last_pdelays_success[instance->statistics.tx_pdelay_req_count] = true;
+                instance->statistics.last_pdelays_success
+                    [instance->statistics.tx_pdelay_req_count] = true;
               }
               instance->last_pdelay_req_sequence_id = 0;
-              if (instance->statistics.in_sync && !check_pdelay_syncloss(instance)) {
+              if (instance->statistics.in_sync &&
+                  !check_pdelay_syncloss(instance)) {
                 instance->statistics.in_sync = false;
                 instance->statistics.sync_loss_count++;
                 if (instance->sync_changed) {
                   instance->sync_changed(false);
                 }
                 if (instance->debug_log) {
-                  instance->debug_log(instance->userdata,
-                                      "Sync loss due to failed PDelay iterations!");
+                  instance->debug_log(
+                      instance->userdata,
+                      "Sync loss due to failed PDelay iterations!");
                 }
               }
               // Trigger re-calculation of offset
