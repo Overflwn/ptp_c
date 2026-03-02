@@ -781,9 +781,17 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               // initiated pdelay -> Ignore this PDelay iteration
               break;
             } else if (instance->last_pdelay_req_sequence_id !=
-                       msg->header.sequence_id) {
+                       ntohs(msg->header.sequence_id)) {
               // PDelay response doesn't match last request, ignoring.. (might
               // be old)
+              if (instance->debug_log) {
+                snprintf(log_buf, sizeof(log_buf),
+                         "Received PDELAY_RESP with non-matching sequence_id "
+                         "(got: %d, expected: %d), ignoring..",
+                         ntohs(msg->header.sequence_id),
+                         instance->last_pdelay_req_sequence_id);
+                instance->debug_log(instance->userdata, log_buf);
+              }
               break;
             }
             uint64_t ts = ts_to_ns(&msg->request_receipt_timestamp);
@@ -816,9 +824,17 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
               // initiated pdelay -> Ignore this PDelay iteration
               break;
             } else if (instance->last_pdelay_req_sequence_id !=
-                       msg->header.sequence_id) {
+                       ntohs(msg->header.sequence_id)) {
               // PDelay response doesn't match last request, ignoring.. (might
               // be old)
+              if (instance->debug_log) {
+                snprintf(log_buf, sizeof(log_buf),
+                         "Received PDELAY_RESP_FOLLOW_UP with non-matching "
+                         "sequence_id (got: %d, expected: %d), ignoring..",
+                         ntohs(msg->header.sequence_id),
+                         instance->last_pdelay_req_sequence_id);
+                instance->debug_log(instance->userdata, log_buf);
+              }
               break;
             }
             uint64_t ts = ts_to_ns(&msg->response_origin_timestamp);
