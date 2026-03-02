@@ -495,13 +495,13 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
     int amount_received = instance->receive(instance->userdata, &recv_metadata,
                                             rx_buf, sizeof(rx_buf));
     if (amount_received > 0) {
+      instance->mutex_lock(instance->mutex);
       uint64_t received_ts = instance->get_time_ns_rx(instance->userdata);
       ptp_message_header_t *header = (ptp_message_header_t *)rx_buf;
       // Ignore messages that looped back from ourselves
       if (0 != memcmp(&header->source_port_identity,
                       &instance->source_port_identity,
                       sizeof(header->source_port_identity))) {
-        instance->mutex_lock(instance->mutex);
         switch (header->message_type) {
         case PTP_MESSAGE_TYPE_SYNC: {
           instance->statistics.rx_sync_count++;
@@ -934,8 +934,8 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
           }
           break;
         }
-        instance->mutex_unlock(instance->mutex);
       }
+      instance->mutex_unlock(instance->mutex);
     } else if (amount_received < 0 && instance->debug_log) {
       // snprintf(log_buf, sizeof(log_buf),
       //          "Failed to receive data. (returnval %d)", amount_received);
