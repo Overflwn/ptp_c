@@ -844,6 +844,19 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
             uint64_t t5 = delay_info->delay_info.t5;
             uint64_t t6 = delay_info->delay_info.t6;
             if (t3 != 0 && t4 != 0 && t5 != 0 && t6 != 0) {
+              if ((t5 - t4) > (t6 - t3)) {
+                // This would lead to a negative delay which doesn't make sense
+                // -> Ignore this
+                if (instance->debug_log) {
+                  snprintf(log_buf, sizeof(log_buf),
+                           "PDelay result negative, "
+                           "ignoring.. (t3: %" PRIu64 ", t4: %" PRIu64
+                           ", t5: %" PRIu64 ", t6: %" PRIu64 ")",
+                           t3, t4, t5, t6);
+                  instance->debug_log(instance->userdata, log_buf);
+                }
+                break;
+              }
               uint64_t delay = ((t6 - t3) - (t5 - t4)) / 2;
               delay_info->delay_info.last_calculated_delay = delay;
               if (instance->debug_log) {
