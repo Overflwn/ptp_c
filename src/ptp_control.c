@@ -798,7 +798,6 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
             delay_info->delay_info.t3 = instance->latest_t3;
             delay_info->delay_info.t4 = ts;
             delay_info->delay_info.t6 = received_ts;
-            instance->latest_t3 = 0;
           } else if (instance->debug_log) {
             // TODO: Handle erroneous state
             instance->debug_log(instance->userdata,
@@ -843,6 +842,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
             uint64_t t4 = delay_info->delay_info.t4;
             uint64_t t5 = delay_info->delay_info.t5;
             uint64_t t6 = delay_info->delay_info.t6;
+            instance->latest_t3 = 0;
             if (t3 != 0 && t4 != 0 && t5 != 0 && t6 != 0) {
               if ((t5 - t4) > (t6 - t3)) {
                 // This would lead to a negative delay which doesn't make sense
