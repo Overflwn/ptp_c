@@ -188,7 +188,7 @@ void ptp_pdelay_req_thread_func(ptp_clock_t *instance) {
             memmove(instance->statistics.last_pdelays_success,
                     &instance->statistics.last_pdelays_success[1],
                     sizeof(bool) * 2);
-            instance->statistics.last_pdelays_success[0] = false;
+            instance->statistics.last_pdelays_success[2] = false;
           } else {
             instance->statistics.last_pdelays_success
                 [instance->statistics.tx_pdelay_req_count] = false;
@@ -871,7 +871,7 @@ void ptp_rx_thread_func(ptp_clock_t *instance) {
                 memmove(instance->statistics.last_pdelays_success,
                         &instance->statistics.last_pdelays_success[1],
                         sizeof(bool) * 2);
-                instance->statistics.last_pdelays_success[0] = true;
+                instance->statistics.last_pdelays_success[2] = true;
               } else {
                 instance->statistics.last_pdelays_success
                     [instance->statistics.tx_pdelay_req_count] = true;
